@@ -2,8 +2,9 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>POS Retail Andal (Cloud)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>POS Retail Andal</title>
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlBPUyBSZXRhaWwgQW5kYWwiLAogICJzaG9ydF9uYW1lIjogIlBPUyIsCiAgInN0YXJ0X3VybCI6ICIuLyIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiI2ZmZiIsCiAgInRoZW1lX2NvbG9yIjogIiMwMDk2ODgiLAogICJvcmllbnRhdGlvbiI6ICJwb3J0cmFpdCIsCiAgImljb25zIjogW3sKICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhSb1pXMWxMemd2UGo0OGRkM0QzWkdSMmR5QmhiV1E5SW1Gdkx6SXdNaUF5TURBeExURTBMVEF3SURBd09qSXdPakF4SWo0OFBDOG5KejQ4TDJKeVBtSnZjbVJsY2p3dlptbHVZMmhoY3k4KyIKICB9XQp9" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -132,13 +133,9 @@
       <div style="flex:1; background:#e0f2f1; padding:10px; border-radius:8px;"><small>Total Transaksi</small><br><strong id="totalTransaksi">0</strong></div>
       <div style="flex:1; background:#e0f2f1; padding:10px; border-radius:8px;"><small>Total Pendapatan</small><br><strong id="totalPendapatan">Rp 0</strong></div>
     </div>
-    <div class="chart-container">
-      <canvas id="chartPenjualan" style="max-height:250px;"></canvas>
-    </div>
+    <div class="chart-container"><canvas id="chartPenjualan" style="max-height:250px;"></canvas></div>
     <h4>Top Selling Products</h4>
-    <div class="chart-container" style="max-width:400px; margin:0 auto;">
-      <canvas id="chartTopProducts" style="max-height:250px;"></canvas>
-    </div>
+    <div class="chart-container" style="max-width:400px; margin:0 auto;"><canvas id="chartTopProducts" style="max-height:250px;"></canvas></div>
     <hr>
     <div class="filter-row">
       <input type="date" id="tglAwal"> s/d <input type="date" id="tglAkhir">
@@ -171,7 +168,7 @@
 
     <h3>Manajemen Cetak</h3>
     <div class="form-group">
-      <label>Printer <button class="info-btn" onclick="alert('Cara mencetak ke printer Bluetooth:\n1. Pastikan printer menyala dan sudah dipasangkan (pairing) di Bluetooth Android.\n2. Pilih "Bluetooth Printer" di dropdown ini.\n3. Saat klik BAYAR & CETAK, invoice akan terbuka di tab baru.\n4. Di tab baru, tekan tombol Bagikan (Share) / Cetak (Print) dari menu browser Chrome.\n5. Pilih printer Bluetooth Anda dari daftar printer yang muncul.\n\nCatatan:\n- Beberapa printer thermal langsung mendukung cetak dari Chrome.\n- Jika tidak muncul, instal aplikasi printer resmi (seperti iPrint, PrinterShare) dan gunakan fitur Bagikan > Cetak.')">ℹ️</button></label>
+      <label>Printer <button class="info-btn" onclick="alert('Untuk printer Bluetooth:\n1. Nyalakan printer dan pastikan dalam mode pairing.\n2. Buka Pengaturan Android > Bluetooth > pindai dan pasangkan dengan printer.\n3. Setelah terhubung, pilih "Bluetooth Printer" di dropdown.\n4. Saat mencetak, Android akan menanyakan printer tujuan.\n\nUntuk printer USB:\n1. Colokkan kabel OTG ke tablet.\n2. Sambungkan printer.\n3. Pilih "USB Printer".')">ℹ️</button></label>
       <div style="display:flex; gap:4px;">
         <select id="printerPilihan" style="flex:1;">
           <option value="default">Default (bawaan browser)</option>
@@ -259,9 +256,16 @@
 </div>
 
 <script>
+  // ===================== SERVICE WORKER =====================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register("data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })");
+    });
+  }
+
   // ===================== KONFIGURASI SUPABASE =====================
-  const SUPABASE_URL = 'https://ikahekmyqvdugiljcrlp.supabase.co';   // GANTI
-  const SUPABASE_ANON_KEY = 'sb_publishable_GjCb5njeiL6W8_HKA-OrLQ_e8dk7IIL'; // GANTI
+  const SUPABASE_URL = 'https://xxxxxxxxxxxx.supabase.co';   // GANTI
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // GANTI
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // ===================== VARIABEL GLOBAL =====================
@@ -270,6 +274,58 @@
   let chartInstance = null;
   let topProductsChart = null;
   let logoTokoDihapus = false;
+
+  // ===================== SESSION PERSISTENCE =====================
+  function saveSession() {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    }
+  }
+
+  function clearSession() {
+    localStorage.removeItem('currentUser');
+  }
+
+  function checkSession() {
+    const saved = localStorage.getItem('currentUser');
+    if (saved) {
+      try {
+        currentUser = JSON.parse(saved);
+        document.getElementById('loginOverlay').style.display = 'none';
+        muatProfilToko();
+        tampilkanUserList();
+        setupTransaksi();
+        setupInventory();
+        refreshProductList();
+        setDefaultDateFilter();
+        if (activeTab === 'laporan') muatLaporan();
+        aturHakAkses();
+        return true;
+      } catch (e) {
+        clearSession();
+      }
+    }
+    document.getElementById('loginOverlay').style.display = 'flex';
+    return false;
+  }
+
+  // ===================== PREVENT BACK BUTTON =====================
+  window.addEventListener('popstate', (e) => {
+    if (confirm('Keluar dari aplikasi?')) {
+      logout();
+    } else {
+      history.pushState(null, null, location.href);
+    }
+  });
+  history.pushState(null, null, location.href);
+
+  // ===================== WARNA SEBELUM TUTUP =====================
+  window.addEventListener('beforeunload', (e) => {
+    if (cart && cart.length > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   // ===================== FUNGSI BANTU SUPABASE =====================
   async function getSettings() {
@@ -351,10 +407,11 @@
     const password = document.getElementById('loginPass').value;
     if (!username || !password) return;
     const { data: user, error } = await supabaseClient.from('users').select('*').eq('username', username).single();
-    if (error) { console.error(error); document.getElementById('loginError').textContent = 'Error: ' + error.message; return; }
+    if (error) { document.getElementById('loginError').textContent = 'Error: ' + error.message; return; }
     if (!user) { document.getElementById('loginError').textContent = 'User tidak ditemukan'; return; }
     if (user.password_hash !== await hashPassword(password)) { document.getElementById('loginError').textContent = 'Password salah'; return; }
     currentUser = user;
+    saveSession();
     document.getElementById('loginOverlay').style.display = 'none';
     await muatProfilToko();
     tampilkanUserList();
@@ -367,6 +424,7 @@
   }
 
   function logout() {
+    clearSession();
     currentUser = null;
     document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('loginUser').value = '';
@@ -378,6 +436,7 @@
     document.querySelector('.tab-btn[data-page="transaksi"]').classList.add('active');
   }
 
+  // ===================== USER MANAGEMENT =====================
   async function tambahUser() {
     if (!currentUser || currentUser.role !== 'admin') return;
     const username = document.getElementById('newUsername').value.trim();
@@ -385,7 +444,7 @@
     const role = document.getElementById('newRole').value;
     if (!username || !password) return alert('Isi username dan password');
     const { error } = await supabaseClient.from('users').upsert({ username, password_hash: await hashPassword(password), role });
-    if (error) return alert('Gagal menambah user: ' + error.message);
+    if (error) return alert('Gagal: ' + error.message);
     tampilkanUserList();
     document.getElementById('newUsername').value = ''; document.getElementById('newPassword').value = '';
   }
@@ -393,6 +452,7 @@
   async function hapusUser(username) {
     if (!currentUser || currentUser.role !== 'admin') return;
     if (username === 'admin') return alert('Admin tidak bisa dihapus');
+    if (!confirm(`Hapus ${username}?`)) return;
     await supabaseClient.from('users').delete().eq('username', username);
     tampilkanUserList();
   }
@@ -428,7 +488,7 @@
     const { data: users } = await supabaseClient.from('users').select('*');
     const tbody = document.getElementById('userListBody');
     tbody.innerHTML = '';
-    if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="3">Belum ada user</td></tr>'; return; }
+    if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="3">Belum ada</td></tr>'; return; }
     users.forEach(u => {
       const row = tbody.insertRow();
       row.innerHTML = `<td>${u.username}</td><td>${u.role}</td><td>
@@ -630,7 +690,6 @@
     const no = `INV-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${now.toTimeString().slice(0, 8).replace(/:/g, '')}`;
     const trx = { no_invoice: no, tanggal: now.toISOString(), customer: cust, items: cart.map(i => ({ barcode: i.barcode, nama: i.nama, harga: i.harga, qty: i.qty, subtotal: i.harga * i.qty })), total, bayar, kembali };
     try {
-      // Update stok
       for (let i of cart) {
         const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
         if (prod) {
@@ -804,11 +863,11 @@
     });
   }
 
-  function filterProductList() { /* bisa diisi filter lokal */ }
+  function filterProductList() { /* ... */ }
   async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
   async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-  // ===================== LAPORAN (CHART DIPERBAIKI) =====================
+  // ===================== LAPORAN =====================
   function setDefaultDateFilter() { const t = new Date().toISOString().slice(0, 10); document.getElementById('tglAwal').value = t; document.getElementById('tglAkhir').value = t; }
   function filterToday() { setDefaultDateFilter(); muatLaporan(); }
   function filterThisWeek() { const n = new Date(), d = n.getDay(), s = new Date(n); s.setDate(n.getDate() - d + (d === 0 ? -6 : 1)); const e = new Date(s); e.setDate(s.getDate() + 6); document.getElementById('tglAwal').value = s.toISOString().slice(0, 10); document.getElementById('tglAkhir').value = e.toISOString().slice(0, 10); muatLaporan(); }
@@ -828,126 +887,48 @@
     }
     document.getElementById('totalTransaksi').textContent = all.length;
     document.getElementById('totalPendapatan').textContent = 'Rp' + all.reduce((s, t) => s + t.total, 0).toLocaleString('id');
-
-    // Render chart
-    const start = new Date(a), end = new Date(b);
-    const diffDays = (end - start) / (1000 * 60 * 60 * 24);
-    let mode = 'hourly';
-    if (diffDays > 1 && diffDays <= 31) mode = 'daily';
-    else if (diffDays > 31) mode = 'monthly';
-    renderChart(all, mode, a, b);
+    renderChart(all, 'daily', a, b);
     renderTopProductsChart(all);
   }
 
-  function renderChart(transactions, mode, startDate, endDate) {
+  function renderChart(trans, mode, start, end) {
     if (chartInstance) chartInstance.destroy();
-    const ctx = document.getElementById('chartPenjualan');
+    const ctx = document.getElementById('chartPenjualan')?.getContext('2d');
     if (!ctx) return;
-    const context = ctx.getContext('2d');
     let labels, data;
     if (mode === 'hourly') {
-      const hourly = {};
-      transactions.forEach(t => {
-        const hour = new Date(t.tanggal).getHours();
-        hourly[hour] = (hourly[hour] || 0) + t.total;
-      });
+      const hourly = {}; trans.forEach(t => { const hr = new Date(t.tanggal).getHours(); hourly[hr] = (hourly[hr] || 0) + t.total; });
       labels = Array.from({ length: 24 }, (_, i) => i + ':00');
       data = labels.map((_, i) => hourly[i] || 0);
     } else if (mode === 'daily') {
-      const daily = {};
-      const s = new Date(startDate), e = new Date(endDate);
-      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-        daily[d.toISOString().slice(0, 10)] = 0;
-      }
-      transactions.forEach(t => {
-        const key = t.tanggal.slice(0, 10);
-        if (daily[key] !== undefined) daily[key] += t.total;
-      });
+      const daily = {}; const s = new Date(start), e = new Date(end);
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) { daily[d.toISOString().slice(0, 10)] = 0; }
+      trans.forEach(t => { const k = t.tanggal.slice(0, 10); if (daily[k] !== undefined) daily[k] += t.total; });
       const keys = Object.keys(daily).sort();
       labels = keys.map(k => new Date(k).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
       data = keys.map(k => daily[k]);
-    } else if (mode === 'monthly') {
-      const monthly = {};
-      const sy = new Date(startDate).getFullYear(), ey = new Date(endDate).getFullYear(), em = new Date(endDate).getMonth();
-      for (let y = sy; y <= ey; y++) {
-        const sm = y === sy ? 0 : 0, em2 = y === ey ? em : 11;
-        for (let m = sm; m <= em2; m++) {
-          monthly[`${y}-${String(m + 1).padStart(2, '0')}`] = 0;
-        }
-      }
-      transactions.forEach(t => {
-        const key = t.tanggal.slice(0, 7);
-        if (monthly.hasOwnProperty(key)) monthly[key] += t.total;
-      });
-      const keys = Object.keys(monthly).sort();
-      labels = keys.map(k => {
-        const [y, mo] = k.split('-');
-        return new Date(y, mo - 1).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
-      });
-      data = keys.map(k => monthly[k]);
     }
-
-    chartInstance = new Chart(context, {
+    chartInstance = new Chart(ctx, {
       type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Penjualan (Rp)',
-          data: data,
-          backgroundColor: '#009688',
-          borderRadius: 4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { callback: v => 'Rp ' + v.toLocaleString('id') }
-          }
-        }
-      }
+      data: { labels, datasets: [{ label: 'Penjualan (Rp)', data, backgroundColor: '#009688', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => 'Rp' + v.toLocaleString('id') } } } }
     });
   }
 
-  function renderTopProductsChart(transactions) {
+  function renderTopProductsChart(trans) {
     if (topProductsChart) topProductsChart.destroy();
-    const ctx = document.getElementById('chartTopProducts');
+    const ctx = document.getElementById('chartTopProducts')?.getContext('2d');
     if (!ctx) return;
-    const context = ctx.getContext('2d');
-    const productSales = {};
-    transactions.forEach(t => {
-      if (t.items) t.items.forEach(item => {
-        const key = item.nama || item.barcode;
-        if (!productSales[key]) productSales[key] = { nama: item.nama, qty: 0 };
-        productSales[key].qty += item.qty || 1;
-      });
-    });
-    const sorted = Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 10);
+    const sales = {}; trans.forEach(t => { if (t.items) t.items.forEach(i => { const k = i.nama || i.barcode; if (!sales[k]) sales[k] = { nama: i.nama, qty: 0 }; sales[k].qty += i.qty || 1; }); });
+    const sorted = Object.values(sales).sort((a, b) => b.qty - a.qty).slice(0, 10);
     const colors = ['#e53935', '#1e88e5', '#fdd835', '#8e24aa', '#fb8c00', '#d81b60', '#00acc1', '#7cb342', '#5e35b1', '#ffb300'];
-    topProductsChart = new Chart(context, {
+    topProductsChart = new Chart(ctx, {
       type: 'pie',
-      data: {
-        labels: sorted.map(p => p.nama),
-        datasets: [{
-          data: sorted.map(p => p.qty),
-          backgroundColor: colors.slice(0, sorted.length),
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
-          tooltip: { callbacks: { label: (ctx) => { const v = ctx.parsed || 0; const t = ctx.dataset.data.reduce((a, b) => a + b, 0); const p = t > 0 ? Math.round((v / t) * 100) : 0; return `${ctx.label}: ${v} item (${p}%)`; } } }
-        }
-      }
+      data: { labels: sorted.map(p => p.nama), datasets: [{ data: sorted.map(p => p.qty), backgroundColor: colors.slice(0, sorted.length), borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
     });
   }
 
-  // ===================== FUNGSI LAIN =====================
   async function viewInvoice(no) {
     const url = await getInvoiceURL(no);
     if (url) window.open(url, '_blank');
@@ -962,10 +943,11 @@
     } else viewInvoice(no);
   }
 
+  function exportCSV() { /* ... */ }
+
   async function pilihFolder() { try { const d = await window.showDirectoryPicker(); workingDirHandle = d; document.getElementById('folderPath').textContent = d.name; alert('Dipilih'); } catch (e) { if (e.name !== 'AbortError') alert('Gagal'); } }
   async function backupData() { /* ... */ }
   async function restoreData() { /* ... */ }
-  function resetDatabase() { if (confirm('Reset?')) { alert('Gunakan dashboard Supabase untuk reset.'); } }
 
   function lihatDetailProduk(barcode) {
     (async () => {
@@ -978,7 +960,8 @@
       document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
       document.getElementById('detailStok').textContent = p.stok || 0;
       const img = document.getElementById('detailFoto');
-      if (p.foto) { img.src = p.foto; img.style.display = 'block'; } else img.style.display = 'none';
+      if (p.foto) { img.src = p.foto; img.style.display = 'block'; }
+      else img.style.display = 'none';
       document.getElementById('productDetailModal').style.display = 'flex';
     })();
   }
@@ -1013,7 +996,9 @@
     if (!admin) {
       await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_PASSWORD_HASH, role: 'admin' });
     }
-    document.getElementById('loginOverlay').style.display = 'flex';
+    if (!checkSession()) {
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
   }
   initApp();
 </script>
