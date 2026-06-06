@@ -1232,21 +1232,7 @@
     });
   });
 
-  async function initApp() {
-    const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
-    if (!admin) {
-      await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_PASSWORD_HASH, role: 'admin' });
-    }
-    if (!checkSession()) {
-      document.getElementById('loginOverlay').style.display = 'flex';
-    }
-  }
-  initApp();
-</script>
-</body>
-</html>
-
-  // ===================== INISIALISASI =====================
+   // ===================== INISIALISASI =====================
   async function initApp() {
     const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
     if (!admin) {
