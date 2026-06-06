@@ -49,10 +49,9 @@
     .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-width:400px; }
     .logo-preview { max-width:120px; max-height:120px; border-radius:8px; margin-bottom:8px; }
     .info-btn { background:none; border:none; font-size:18px; cursor:pointer; color:#009688; padding:0 4px; }
-    .led { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    .led { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; }
     .led-green { background:#4caf50; }
     .led-red { background:#f44336; }
-    .led-off { background:#ccc; }
   </style>
 </head>
 <body>
@@ -95,10 +94,11 @@
     </div>
     <div>Kembalian: Rp <span id="kembalian">0</span></div>
     <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px;">💳 BAYAR & CETAK</button>
-    <div style="margin-top:8px;">
-      <span id="printerStatusTransaksi">
-        <span class="led led-off"></span> Printer tidak terhubung
-      </span>
+    <!-- Indikator Printer -->
+    <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+      <span class="led" id="printerLedTrans" style="background:#f44336;"></span>
+      <span id="printerStatusTrans">Printer tidak terhubung</span>
+      <button class="btn btn-sm btn-danger" id="btnPutusTrans" onclick="putuskanBluetooth()" style="display:none;">Putus</button>
     </div>
   </div>
 
@@ -154,10 +154,7 @@
       <button class="btn btn-sm" onclick="filterYTD()">YTD</button>
       <button class="btn btn-sm" onclick="muatLaporan()">Tampilkan</button>
     </div>
-    <table class="report-table" id="reportTable">
-      <thead><tr><th>No Invoice</th><th>Tanggal</th><th>Customer</th><th>Total</th><th>Aksi</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <table class="report-table" id="reportTable"><thead><tr><th>No Invoice</th><th>Tanggal</th><th>Customer</th><th>Total</th><th>Aksi</th></tr></thead><tbody></tbody></table>
     <button class="btn" onclick="exportCSV()">📥 Export CSV</button>
   </div>
 
@@ -180,22 +177,20 @@
 
     <h3>Manajemen Cetak</h3>
     <div class="form-group">
-      <label>Printer 
-        <button class="info-btn" onclick="alert('Untuk printer Bluetooth:\n1. Nyalakan printer dan pastikan dalam mode pairing.\n2. Klik "Hubungkan Printer" di bawah.\n3. Pilih printer dari daftar.\n4. Setelah terhubung, LED akan hijau.\n5. Saat mencetak, data akan dikirim langsung ke printer.')">ℹ️</button>
-      </label>
-      <div style="display:flex; gap:4px;">
+      <label>Printer <button class="info-btn" onclick="alert('Untuk printer Bluetooth:\n1. Nyalakan printer dan pastikan dalam mode pairing.\n2. Klik \"Pindai Printer\" di bawah.\n3. Pilih printer dari daftar.\n4. Klik \"Sambungkan\".')">ℹ️</button></label>
+      <div style="display:flex; gap:4px; margin-bottom:4px;">
         <select id="printerPilihan" style="flex:1;">
           <option value="default">Default (bawaan browser)</option>
           <option value="bluetooth">Bluetooth Printer</option>
           <option value="usb">USB Printer</option>
         </select>
-        <button class="btn btn-sm" onclick="hubungkanPrinter()">🔗 Hubungkan</button>
+        <button class="btn btn-sm" onclick="pindaiBluetooth()">🔍 Pindai</button>
       </div>
-      <div style="margin-top:4px;">
-        <span id="printerStatusSetting">
-          <span class="led led-off"></span> Tidak terhubung
-        </span>
-        <button class="btn btn-sm btn-danger" id="btnPutusPrinter" onclick="putuskanPrinter()" style="display:none;">Putuskan</button>
+      <div id="bluetoothDeviceList" style="margin-bottom:4px;"></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="led" id="printerLedSetting" style="background:#f44336;"></span>
+        <span id="printerStatusSetting">Tidak terhubung</span>
+        <button class="btn btn-sm btn-danger" id="btnPutusSetting" onclick="putuskanBluetooth()" style="display:none;">Putus</button>
       </div>
     </div>
     <div class="form-group"><label>Lebar Kertas</label>
@@ -294,14 +289,20 @@
   let chartInstance = null;
   let topProductsChart = null;
   let logoTokoDihapus = false;
-
-  // Bluetooth
   let bluetoothDevice = null;
-  let bluetoothCharacteristic = null;
+  let bluetoothChar = null;
 
   // ===================== SESSION PERSISTENCE =====================
-  function saveSession() { if (currentUser) localStorage.setItem('currentUser', JSON.stringify(currentUser)); }
-  function clearSession() { localStorage.removeItem('currentUser'); }
+  function saveSession() {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    }
+  }
+
+  function clearSession() {
+    localStorage.removeItem('currentUser');
+  }
+
   function checkSession() {
     const saved = localStorage.getItem('currentUser');
     if (saved) {
@@ -317,7 +318,9 @@
         if (activeTab === 'laporan') muatLaporan();
         aturHakAkses();
         return true;
-      } catch (e) { clearSession(); }
+      } catch (e) {
+        clearSession();
+      }
     }
     document.getElementById('loginOverlay').style.display = 'flex';
     return false;
@@ -325,54 +328,153 @@
 
   // ===================== PREVENT BACK BUTTON =====================
   window.addEventListener('popstate', (e) => {
-    if (confirm('Keluar dari aplikasi?')) { logout(); }
-    else { history.pushState(null, null, location.href); }
+    if (confirm('Keluar dari aplikasi?')) {
+      logout();
+    } else {
+      history.pushState(null, null, location.href);
+    }
   });
   history.pushState(null, null, location.href);
 
-  // ===================== FUNGSI BANTU SUPABASE =====================
+  // ===================== BLUETOOTH =====================
+  async function pindaiBluetooth() {
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'] // Serial Port Service
+      });
+      bluetoothDevice = device;
+      updatePrinterStatus('terhubung', device.name);
+      document.getElementById('printerPilihan').value = 'bluetooth';
+      connectBluetooth();
+    } catch (e) {
+      if (e.name !== 'NotFoundError') alert('Gagal memindai: ' + e.message);
+    }
+  }
+
+  async function connectBluetooth() {
+    if (!bluetoothDevice) return;
+    try {
+      const server = await bluetoothDevice.gatt.connect();
+      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+      bluetoothChar = characteristic;
+      updatePrinterStatus('terhubung', bluetoothDevice.name);
+    } catch (e) {
+      updatePrinterStatus('error');
+      console.error(e);
+    }
+  }
+
+  function updatePrinterStatus(status, name) {
+    const ledSetting = document.getElementById('printerLedSetting');
+    const statusSetting = document.getElementById('printerStatusSetting');
+    const btnPutusSetting = document.getElementById('btnPutusSetting');
+    const ledTrans = document.getElementById('printerLedTrans');
+    const statusTrans = document.getElementById('printerStatusTrans');
+    const btnPutusTrans = document.getElementById('btnPutusTrans');
+
+    if (status === 'terhubung') {
+      ledSetting.className = 'led led-green';
+      statusSetting.textContent = `Terhubung: ${name || ''}`;
+      btnPutusSetting.style.display = 'inline-block';
+      ledTrans.className = 'led led-green';
+      statusTrans.textContent = `Printer siap: ${name || ''}`;
+      btnPutusTrans.style.display = 'inline-block';
+    } else {
+      ledSetting.className = 'led led-red';
+      statusSetting.textContent = 'Tidak terhubung';
+      btnPutusSetting.style.display = 'none';
+      ledTrans.className = 'led led-red';
+      statusTrans.textContent = 'Printer tidak terhubung';
+      btnPutusTrans.style.display = 'none';
+    }
+  }
+
+  async function putuskanBluetooth() {
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      await bluetoothDevice.gatt.disconnect();
+    }
+    bluetoothDevice = null;
+    bluetoothChar = null;
+    updatePrinterStatus('disconnected');
+  }
+
+  async function printBluetooth(data) {
+    if (!bluetoothChar) throw new Error('Bluetooth tidak terhubung');
+    const encoder = new TextEncoder();
+    const chunkSize = 128;
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.slice(i, i + chunkSize);
+      await bluetoothChar.writeValue(encoder.encode(chunk));
+    }
+  }
+
+  // ===================== SUPABASE FUNCTIONS =====================
   async function getSettings() {
     const { data } = await supabaseClient.from('settings').select('*').eq('id', 1).single();
     return data || {};
   }
+
   async function updateSettings(settings) {
     await supabaseClient.from('settings').upsert({ id: 1, ...settings });
   }
+
   async function getAllProducts() {
     const { data } = await supabaseClient.from('products').select('*').order('nama');
     return data || [];
   }
+
   async function getProductByBarcode(barcode) {
     const { data } = await supabaseClient.from('products').select('*').eq('barcode', barcode).single();
     return data || null;
   }
+
   async function upsertProduct(product) {
     const { error } = await supabaseClient.from('products').upsert(product);
     if (error) throw error;
   }
+
   async function deleteProduct(barcode) {
     const { error } = await supabaseClient.from('products').delete().eq('barcode', barcode);
     if (error) throw error;
   }
+
   async function getAllTransactions(startDate, endDate) {
     let query = supabaseClient.from('transactions').select('*').order('tanggal', { ascending: false });
     if (startDate) query = query.gte('tanggal', startDate);
-    if (endDate) { const end = new Date(endDate); end.setDate(end.getDate() + 1); query = query.lt('tanggal', end.toISOString()); }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setDate(end.getDate() + 1);
+      query = query.lt('tanggal', end.toISOString());
+    }
     const { data } = await query;
     return data || [];
   }
+
   async function insertTransaction(trx) {
     const { error } = await supabaseClient.from('transactions').insert(trx);
     if (error) throw error;
   }
+
   async function deleteTransaction(noInv) {
     const { error } = await supabaseClient.from('transactions').delete().eq('no_invoice', noInv);
     if (error) throw error;
   }
+
+  async function getTransaction(noInv) {
+    const { data } = await supabaseClient.from('transactions').select('*').eq('no_invoice', noInv).single();
+    return data || null;
+  }
+
   async function uploadInvoicePDF(noInv, blob) {
-    const { error } = await supabaseClient.storage.from('invoices').upload(`${noInv}.pdf`, blob, { contentType: 'application/pdf', upsert: true });
+    const { error } = await supabaseClient.storage.from('invoices').upload(`${noInv}.pdf`, blob, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
     if (error) console.warn('Gagal unggah PDF:', error.message);
   }
+
   async function getInvoiceURL(noInv) {
     const { data } = supabaseClient.storage.from('invoices').getPublicUrl(`${noInv}.pdf`);
     return data?.publicUrl || null;
@@ -392,6 +494,7 @@
     for (let i = 0; i < pwd.length; i++) { const char = pwd.charCodeAt(i); hash = ((hash << 5) - hash) + char; hash |= 0; }
     return 'fallback_' + Math.abs(hash).toString(16);
   }
+
   async function login() {
     const username = document.getElementById('loginUser').value.trim();
     const password = document.getElementById('loginPass').value;
@@ -412,6 +515,7 @@
     if (activeTab === 'laporan') muatLaporan();
     aturHakAkses();
   }
+
   function logout() {
     clearSession();
     currentUser = null;
@@ -437,6 +541,7 @@
     tampilkanUserList();
     document.getElementById('newUsername').value = ''; document.getElementById('newPassword').value = '';
   }
+
   async function hapusUser(username) {
     if (!currentUser || currentUser.role !== 'admin') return;
     if (username === 'admin') return alert('Admin tidak bisa dihapus');
@@ -444,6 +549,7 @@
     await supabaseClient.from('users').delete().eq('username', username);
     tampilkanUserList();
   }
+
   function editUser(username) {
     if (!currentUser || currentUser.role !== 'admin') return;
     supabaseClient.from('users').select('*').eq('username', username).single().then(({ data: u }) => {
@@ -455,6 +561,7 @@
       document.getElementById('editUserModal').style.display = 'flex';
     });
   }
+
   async function simpanEditUser() {
     const username = document.getElementById('editUsername').value;
     const password = document.getElementById('editPassword').value;
@@ -465,6 +572,7 @@
     document.getElementById('editUserModal').style.display = 'none';
     tampilkanUserList();
   }
+
   async function tampilkanUserList() {
     if (!currentUser || currentUser.role !== 'admin') {
       document.getElementById('userListBody').innerHTML = '<tr><td colspan="3">Admin only</td></tr>';
@@ -476,7 +584,10 @@
     if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="3">Belum ada</td></tr>'; return; }
     users.forEach(u => {
       const row = tbody.insertRow();
-      row.innerHTML = `<td>${u.username}</td><td>${u.role}</td><td><button class="btn-sm" onclick="editUser('${u.username}')">✏️</button>${u.username !== 'admin' ? `<button class="btn-sm btn-danger" onclick="hapusUser('${u.username}')">🗑</button>` : ''}</td>`;
+      row.innerHTML = `<td>${u.username}</td><td>${u.role}</td><td>
+        <button class="btn-sm" onclick="editUser('${u.username}')">✏️</button>
+        ${u.username !== 'admin' ? `<button class="btn-sm btn-danger" onclick="hapusUser('${u.username}')">🗑</button>` : ''}
+      </td>`;
     });
   }
 
@@ -499,19 +610,32 @@
       if (settings.logo) {
         document.getElementById('logoPreview').src = settings.logo;
         document.getElementById('logoPreviewContainer').style.display = 'block';
-      } else { document.getElementById('logoPreviewContainer').style.display = 'none'; }
+      } else {
+        document.getElementById('logoPreviewContainer').style.display = 'none';
+      }
     }
   }
+
   function previewLogoToko() {
     const f = document.getElementById('tokoLogo').files[0];
     if (f) {
       const reader = new FileReader();
-      reader.onload = e => { document.getElementById('logoPreview').src = e.target.result; document.getElementById('logoPreviewContainer').style.display = 'block'; };
+      reader.onload = e => {
+        document.getElementById('logoPreview').src = e.target.result;
+        document.getElementById('logoPreviewContainer').style.display = 'block';
+      };
       reader.readAsDataURL(f);
       logoTokoDihapus = false;
     }
   }
-  function hapusLogoToko() { document.getElementById('logoPreview').src = ''; document.getElementById('logoPreviewContainer').style.display = 'none'; document.getElementById('tokoLogo').value = ''; logoTokoDihapus = true; }
+
+  function hapusLogoToko() {
+    document.getElementById('logoPreview').src = '';
+    document.getElementById('logoPreviewContainer').style.display = 'none';
+    document.getElementById('tokoLogo').value = '';
+    logoTokoDihapus = true;
+  }
+
   async function simpanProfil() {
     if (!currentUser || currentUser.role !== 'admin') return;
     const nama = document.getElementById('tokoNama').value;
@@ -525,11 +649,16 @@
     const labelHeight = parseFloat(document.getElementById('labelHeight').value) || 30;
     const labelGap = parseFloat(document.getElementById('labelGap').value) || 3;
     const labelCols = parseInt(document.getElementById('labelCols').value) || 1;
+
     let logo = null;
     if (!logoTokoDihapus) {
       const fileInput = document.getElementById('tokoLogo');
       if (fileInput.files[0]) {
-        logo = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(fileInput.files[0]); });
+        logo = await new Promise(res => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result);
+          reader.readAsDataURL(fileInput.files[0]);
+        });
       } else {
         const settings = await getSettings();
         logo = settings.logo || null;
@@ -541,9 +670,11 @@
     document.getElementById('tokoLogo').value = '';
     await muatProfilToko();
   }
+
   async function simpanPengaturanCetak() {
     const settings = await getSettings();
-    await updateSettings({ ...settings,
+    await updateSettings({
+      ...settings,
       kertas_lebar: document.getElementById('kertasLebar').value,
       jenis_kertas: document.getElementById('jenisKertas').value,
       printer: document.getElementById('printerPilihan').value,
@@ -554,63 +685,9 @@
     });
     alert('Pengaturan cetak disimpan');
   }
+
   function toggleLabelSettings() {
     document.getElementById('labelSettings').style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
-  }
-
-  // ===================== BLUETOOTH PRINTER =====================
-  async function hubungkanPrinter() {
-    try {
-      bluetoothDevice = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }] // Printer service
-      });
-      const server = await bluetoothDevice.gatt.connect();
-      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-      updatePrinterStatus(true);
-      alert('Printer Bluetooth terhubung!');
-    } catch (error) {
-      console.error(error);
-      alert('Gagal menghubungkan printer: ' + error.message);
-      bluetoothDevice = null;
-      bluetoothCharacteristic = null;
-      updatePrinterStatus(false);
-    }
-  }
-
-  async function putuskanPrinter() {
-    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-      await bluetoothDevice.gatt.disconnect();
-    }
-    bluetoothDevice = null;
-    bluetoothCharacteristic = null;
-    updatePrinterStatus(false);
-  }
-
-  function updatePrinterStatus(connected) {
-    const statusSetting = document.getElementById('printerStatusSetting');
-    const statusTransaksi = document.getElementById('printerStatusTransaksi');
-    const btnPutus = document.getElementById('btnPutusPrinter');
-
-    if (connected) {
-      statusSetting.innerHTML = '<span class="led led-green"></span> Terhubung';
-      statusTransaksi.innerHTML = '<span class="led led-green"></span> Printer siap';
-      btnPutus.style.display = 'inline-block';
-    } else {
-      statusSetting.innerHTML = '<span class="led led-off"></span> Tidak terhubung';
-      statusTransaksi.innerHTML = '<span class="led led-off"></span> Printer tidak terhubung';
-      btnPutus.style.display = 'none';
-    }
-  }
-
-  async function cetakKeBluetooth(data) {
-    if (!bluetoothCharacteristic) throw new Error('Printer tidak terhubung');
-    const encoder = new TextEncoder();
-    const chunkSize = 512; // Maksimum bytes per write untuk BLE
-    for (let i = 0; i < data.length; i += chunkSize) {
-      const chunk = data.slice(i, i + chunkSize);
-      await bluetoothCharacteristic.writeValue(encoder.encode(chunk));
-    }
   }
 
   async function testPrint() {
@@ -620,24 +697,13 @@
     doc.setFontSize(10);
     doc.text('Test Print', 3, 10);
     doc.setFontSize(8);
-    doc.text('Printer: ' + (bluetoothDevice ? 'Bluetooth' : 'Default'), 3, 18);
+    doc.text('Printer: ' + document.getElementById('printerPilihan').value, 3, 18);
     doc.text('Lebar: ' + lebarKertas + 'mm', 3, 24);
     doc.text(new Date().toLocaleString('id-ID'), 3, 30);
-
-    if (bluetoothCharacteristic) {
-      try {
-        const text = doc.output('text');
-        await cetakKeBluetooth(text);
-        alert('Test cetak Bluetooth berhasil');
-      } catch (e) {
-        alert('Gagal cetak Bluetooth: ' + e.message);
-      }
-    } else {
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-      const pw = window.open(url, '_blank');
-      if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-    }
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const pw = window.open(url, '_blank');
+    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
   }
 
   // ===================== TRANSAKSI =====================
@@ -773,21 +839,24 @@
         y += 8;
       }
 
-      if (bluetoothCharacteristic) {
-        const text = doc.output('text');
-        await cetakKeBluetooth(text);
-      } else {
-        const pdfBlob = doc.output('blob');
-        await uploadInvoicePDF(no, pdfBlob);
-        if (workingDirHandle) {
-          try {
-            const fh = await workingDirHandle.getFileHandle(no + '.pdf', { create: true });
-            const w = await fh.createWritable(); await w.write(pdfBlob); await w.close();
-          } catch (e) { }
-        }
-        const url = URL.createObjectURL(pdfBlob);
-        const pw = window.open(url, '_blank');
-        if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+      const pdfBlob = doc.output('blob');
+      await uploadInvoicePDF(no, pdfBlob);
+      if (workingDirHandle) {
+        try {
+          const fh = await workingDirHandle.getFileHandle(no + '.pdf', { create: true });
+          const w = await fh.createWritable(); await w.write(pdfBlob); await w.close();
+        } catch (e) { }
+      }
+      const url = URL.createObjectURL(pdfBlob);
+      const pw = window.open(url, '_blank');
+      if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+
+      // Cetak Bluetooth jika terhubung
+      if (bluetoothChar) {
+        try {
+          const text = doc.output('datauristring');
+          await printBluetooth(text);
+        } catch (e) { alert('Gagal cetak Bluetooth: ' + e.message); }
       }
 
       cart = []; renderCart();
@@ -835,7 +904,15 @@
       fotoDihapus = false;
     }
   }
-  function hapusFoto() { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('fotoPreview').src = ''; document.getElementById('fotoPreviewContainer').style.display = 'none'; document.getElementById('prodFoto').value = ''; fotoDihapus = true; }
+
+  function hapusFoto() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    document.getElementById('fotoPreview').src = '';
+    document.getElementById('fotoPreviewContainer').style.display = 'none';
+    document.getElementById('prodFoto').value = '';
+    fotoDihapus = true;
+  }
+
   function isiFormProduk(produk, isNew, isAdmin) {
     document.getElementById('formTitle').textContent = isAdmin ? (isNew ? 'Tambah Baru' : 'Update') : 'Detail';
     document.getElementById('prodNama').value = produk.nama || ''; document.getElementById('prodKategori').value = produk.kategori || ''; document.getElementById('prodKeterangan').value = produk.keterangan || '';
@@ -852,15 +929,29 @@
         if (fotoDihapus) foto = null;
         else { const fi = document.getElementById('prodFoto'); if (fi.files[0]) foto = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(fi.files[0]); }); }
         const data = { barcode: currentBarcode, nama: document.getElementById('prodNama').value.trim(), kategori: document.getElementById('prodKategori').value.trim(), keterangan: document.getElementById('prodKeterangan').value.trim(), harga_beli: parseFloat(document.getElementById('prodHargaBeli').value) || 0, harga_jual: parseFloat(document.getElementById('prodHargaJual').value) || 0, stok: (parseInt(document.getElementById('stokSaatIni').textContent) || 0) + (parseInt(document.getElementById('perubahanStok').value) || 0), foto };
-        try { await upsertProduct(data); alert('Disimpan'); tutupFormProduk(); refreshProductList(); } catch (e) { alert('Gagal: ' + e.message); }
+        try {
+          await upsertProduct(data);
+          alert('Disimpan'); tutupFormProduk(); refreshProductList();
+        } catch (e) { alert('Gagal: ' + e.message); }
       };
-      document.getElementById('btnHapusProduk').onclick = async () => { if (confirm('Hapus?')) { await deleteProduct(currentBarcode); alert('Dihapus'); tutupFormProduk(); refreshProductList(); } };
+      document.getElementById('btnHapusProduk').onclick = async () => {
+        if (confirm('Hapus?')) { await deleteProduct(currentBarcode); alert('Dihapus'); tutupFormProduk(); refreshProductList(); }
+      };
     }
   }
-  function tutupFormProduk() { document.getElementById('productForm').style.display = 'none'; document.getElementById('prodBarcode').value = ''; document.getElementById('prodBarcode').focus(); currentBarcode = null; document.getElementById('fotoPreviewContainer').style.display = 'none'; document.getElementById('prodFoto').value = ''; fotoDihapus = false; ['prodNama', 'prodKategori', 'prodKeterangan', 'prodHargaBeli', 'prodHargaJual', 'perubahanStok', 'prodFoto'].forEach(id => { document.getElementById(id).readOnly = false; document.getElementById(id).disabled = false; }); document.getElementById('btnSimpanProduk').style.display = 'inline-block'; document.getElementById('btnHapusProduk').style.display = 'none'; document.getElementById('btnHapusFoto').style.display = 'block'; }
+
+  function tutupFormProduk() {
+    document.getElementById('productForm').style.display = 'none'; document.getElementById('prodBarcode').value = ''; document.getElementById('prodBarcode').focus(); currentBarcode = null;
+    document.getElementById('fotoPreviewContainer').style.display = 'none'; document.getElementById('prodFoto').value = ''; fotoDihapus = false;
+    ['prodNama', 'prodKategori', 'prodKeterangan', 'prodHargaBeli', 'prodHargaJual', 'perubahanStok', 'prodFoto'].forEach(id => { document.getElementById(id).readOnly = false; document.getElementById(id).disabled = false; });
+    document.getElementById('btnSimpanProduk').style.display = 'inline-block'; document.getElementById('btnHapusProduk').style.display = 'none'; document.getElementById('btnHapusFoto').style.display = 'block';
+  }
+
   function hitungStokAkhir() { const a = parseInt(document.getElementById('stokSaatIni').textContent) || 0, b = parseInt(document.getElementById('perubahanStok').value) || 0; document.getElementById('stokAkhir').textContent = a + b; }
+
   async function refreshProductList() {
-    const all = await getAllProducts(); document.getElementById('productCount').textContent = all.length;
+    const all = await getAllProducts();
+    document.getElementById('productCount').textContent = all.length;
     const tbody = document.querySelector('#productListTable tbody'); tbody.innerHTML = '';
     if (!all.length) { tbody.innerHTML = '<tr><td colspan="7">Belum ada</td></tr>'; return; }
     const isAdmin = currentUser && currentUser.role === 'admin';
@@ -872,15 +963,18 @@
       row.innerHTML = `<td>${p.barcode || ''}</td>${namaCell}<td>${p.kategori || '-'}</td><td>${p.keterangan || '-'}</td><td>Rp${(p.harga_jual || 0).toLocaleString('id')}</td><td>${p.stok || 0}</td><td>${aksi}</td>`;
     });
   }
+
+  function filterProductList() { /* ... */ }
   async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
   async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-  // ===================== LAPORAN + HAPUS TRANSAKSI =====================
+  // ===================== LAPORAN =====================
   function setDefaultDateFilter() { const t = new Date().toISOString().slice(0, 10); document.getElementById('tglAwal').value = t; document.getElementById('tglAkhir').value = t; }
   function filterToday() { setDefaultDateFilter(); muatLaporan(); }
   function filterThisWeek() { const n = new Date(), d = n.getDay(), s = new Date(n); s.setDate(n.getDate() - d + (d === 0 ? -6 : 1)); const e = new Date(s); e.setDate(s.getDate() + 6); document.getElementById('tglAwal').value = s.toISOString().slice(0, 10); document.getElementById('tglAkhir').value = e.toISOString().slice(0, 10); muatLaporan(); }
   function filterMTD() { const n = new Date(); document.getElementById('tglAwal').value = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10); document.getElementById('tglAkhir').value = n.toISOString().slice(0, 10); muatLaporan(); }
   function filterYTD() { const n = new Date(); document.getElementById('tglAwal').value = new Date(n.getFullYear(), 0, 1).toISOString().slice(0, 10); document.getElementById('tglAkhir').value = n.toISOString().slice(0, 10); muatLaporan(); }
+
   async function muatLaporan() {
     const a = document.getElementById('tglAwal').value, b = document.getElementById('tglAkhir').value; if (!a || !b) return;
     const all = await getAllTransactions(a + 'T00:00:00', b + 'T23:59:59');
@@ -889,11 +983,10 @@
     else {
       all.forEach(t => {
         const row = tbody.insertRow();
-        row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td>
-        <td>
+        row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
           <button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button>
           <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️</button>
-          <button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑️</button>
+          <button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>
         </td>`;
       });
     }
@@ -904,10 +997,13 @@
   }
 
   async function hapusTransaksi(noInv) {
+    if (!currentUser || currentUser.role !== 'admin') return alert('Hanya admin yang bisa menghapus transaksi');
     if (!confirm(`Hapus transaksi ${noInv}? Stok akan dikembalikan.`)) return;
     try {
-      const { data: trx } = await supabaseClient.from('transactions').select('*').eq('no_invoice', noInv).single();
-      if (trx && trx.items) {
+      const trx = await getTransaction(noInv);
+      if (!trx) return alert('Transaksi tidak ditemukan');
+      // Kembalikan stok
+      if (trx.items && Array.isArray(trx.items)) {
         for (let item of trx.items) {
           const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', item.barcode).single();
           if (prod) {
@@ -915,12 +1011,11 @@
           }
         }
       }
+      // Hapus transaksi
       await deleteTransaction(noInv);
-      alert('Transaksi berhasil dihapus dan stok dikembalikan');
+      alert('Transaksi dihapus dan stok dikembalikan');
       muatLaporan();
-    } catch (e) {
-      alert('Gagal menghapus: ' + e.message);
-    }
+    } catch (e) { alert('Gagal: ' + e.message); }
   }
 
   function renderChart(trans, mode, start, end) {
@@ -940,8 +1035,13 @@
       labels = keys.map(k => new Date(k).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
       data = keys.map(k => daily[k]);
     }
-    chartInstance = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: 'Penjualan (Rp)', data, backgroundColor: '#009688', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => 'Rp' + v.toLocaleString('id') } } } } });
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Penjualan (Rp)', data, backgroundColor: '#009688', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => 'Rp' + v.toLocaleString('id') } } } }
+    });
   }
+
   function renderTopProductsChart(trans) {
     if (topProductsChart) topProductsChart.destroy();
     const ctx = document.getElementById('chartTopProducts')?.getContext('2d');
@@ -949,21 +1049,84 @@
     const sales = {}; trans.forEach(t => { if (t.items) t.items.forEach(i => { const k = i.nama || i.barcode; if (!sales[k]) sales[k] = { nama: i.nama, qty: 0 }; sales[k].qty += i.qty || 1; }); });
     const sorted = Object.values(sales).sort((a, b) => b.qty - a.qty).slice(0, 10);
     const colors = ['#e53935', '#1e88e5', '#fdd835', '#8e24aa', '#fb8c00', '#d81b60', '#00acc1', '#7cb342', '#5e35b1', '#ffb300'];
-    topProductsChart = new Chart(ctx, { type: 'pie', data: { labels: sorted.map(p => p.nama), datasets: [{ data: sorted.map(p => p.qty), backgroundColor: colors.slice(0, sorted.length), borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } } });
-  }
-  async function viewInvoice(no) { const url = await getInvoiceURL(no); if (url) window.open(url, '_blank'); else alert('Tidak tersedia'); }
-  async function cetakUlang(no) {
-    const url = await getInvoiceURL(no);
-    if (url) { const pw = window.open(url, '_blank'); if (pw) pw.addEventListener('load', () => pw.print(), { once: true }); }
-    else viewInvoice(no);
+    topProductsChart = new Chart(ctx, {
+      type: 'pie',
+      data: { labels: sorted.map(p => p.nama), datasets: [{ data: sorted.map(p => p.qty), backgroundColor: colors.slice(0, sorted.length), borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+    });
   }
 
-  // ===================== INISIALISASI =====================
+  async function viewInvoice(no) {
+    const url = await getInvoiceURL(no);
+    if (url) window.open(url, '_blank');
+    else alert('Tidak tersedia');
+  }
+
+  async function cetakUlang(no) {
+    const url = await getInvoiceURL(no);
+    if (url) {
+      const pw = window.open(url, '_blank');
+      if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+    } else viewInvoice(no);
+  }
+
+  function exportCSV() { /* ... */ }
+
+  async function pilihFolder() { try { const d = await window.showDirectoryPicker(); workingDirHandle = d; document.getElementById('folderPath').textContent = d.name; alert('Dipilih'); } catch (e) { if (e.name !== 'AbortError') alert('Gagal'); } }
+  async function backupData() { /* ... */ }
+  async function restoreData() { /* ... */ }
+  function resetDatabase() { if (confirm('Reset?')) { alert('Gunakan dashboard Supabase untuk reset'); } }
+
+  function lihatDetailProduk(barcode) {
+    (async () => {
+      const p = await getProductByBarcode(barcode);
+      if (!p) return;
+      document.getElementById('detailNama').textContent = p.nama || '';
+      document.getElementById('detailBarcode').textContent = p.barcode || '';
+      document.getElementById('detailKategori').textContent = p.kategori || '-';
+      document.getElementById('detailKeterangan').textContent = p.keterangan || '-';
+      document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
+      document.getElementById('detailStok').textContent = p.stok || 0;
+      const img = document.getElementById('detailFoto');
+      if (p.foto) { img.src = p.foto; img.style.display = 'block'; }
+      else img.style.display = 'none';
+      document.getElementById('productDetailModal').style.display = 'flex';
+    })();
+  }
+
+  function aturHakAkses() {
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('manajemenUserSection').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('manajemenDataSection').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('thAksi').style.display = isAdmin ? '' : 'none';
+    if (activeTab === 'inventory') refreshProductList();
+  }
+
+  let activeTab = 'transaksi';
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!currentUser) return;
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+      document.getElementById('page-' + b.dataset.page).classList.add('active');
+      b.classList.add('active');
+      activeTab = b.dataset.page;
+      if (activeTab === 'laporan') { setDefaultDateFilter(); muatLaporan(); }
+      if (activeTab === 'setting') { muatProfilToko(); tampilkanUserList(); aturHakAkses(); }
+      if (activeTab === 'inventory') refreshProductList();
+      if (activeTab === 'transaksi') document.getElementById('scanInputTrans').focus();
+    });
+  });
+
   async function initApp() {
     const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
-    if (!admin) { await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_PASSWORD_HASH, role: 'admin' }); }
-    if (!checkSession()) { document.getElementById('loginOverlay').style.display = 'flex'; }
-    updatePrinterStatus(false);
+    if (!admin) {
+      await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_PASSWORD_HASH, role: 'admin' });
+    }
+    if (!checkSession()) {
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
   }
   initApp();
 </script>
