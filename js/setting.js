@@ -1,20 +1,21 @@
+// ===================== FILE: js/setting.js =====================
 async function muatProfilToko() {
-  const settings = await getSettings();
-  if (settings) {
-    document.getElementById('tokoNama').value = settings.nama || '';
-    document.getElementById('tokoAlamat').value = settings.alamat || '';
-    document.getElementById('tokoTelp').value = settings.telp || '';
-    document.getElementById('tokoFooter').value = settings.footer || '';
-    document.getElementById('kertasLebar').value = settings.kertas_lebar || '80';
-    document.getElementById('jenisKertas').value = settings.jenis_kertas || 'thermal';
-    document.getElementById('printerPilihan').value = settings.printer || 'default';
-    document.getElementById('labelWidth').value = settings.label_width || 50;
-    document.getElementById('labelHeight').value = settings.label_height || 30;
-    document.getElementById('labelGap').value = settings.label_gap || 3;
-    document.getElementById('labelCols').value = settings.label_cols || 1;
+  const s = await getSettings();
+  if (s) {
+    document.getElementById('tokoNama').value = s.nama || '';
+    document.getElementById('tokoAlamat').value = s.alamat || '';
+    document.getElementById('tokoTelp').value = s.telp || '';
+    document.getElementById('tokoFooter').value = s.footer || '';
+    document.getElementById('kertasLebar').value = s.kertas_lebar || '80';
+    document.getElementById('jenisKertas').value = s.jenis_kertas || 'thermal';
+    document.getElementById('printerPilihan').value = s.printer || 'default';
+    document.getElementById('labelWidth').value = s.label_width || 50;
+    document.getElementById('labelHeight').value = s.label_height || 30;
+    document.getElementById('labelGap').value = s.label_gap || 3;
+    document.getElementById('labelCols').value = s.label_cols || 1;
     toggleLabelSettings();
-    if (settings.logo) {
-      document.getElementById('logoPreview').src = settings.logo;
+    if (s.logo) {
+      document.getElementById('logoPreview').src = s.logo;
       document.getElementById('logoPreviewContainer').style.display = 'block';
     } else {
       document.getElementById('logoPreviewContainer').style.display = 'none';
@@ -59,7 +60,7 @@ async function simpanProfil() {
   if (!logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
-      logo = await toBase64(fi.files[0]);
+      logo = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(fi.files[0]); });
     } else {
       const s = await getSettings();
       logo = s.logo || null;
@@ -88,63 +89,26 @@ async function simpanPengaturanCetak() {
 }
 
 function toggleLabelSettings() {
-  document.getElementById('labelSettings').style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
+  const el = document.getElementById('labelSettings');
+  if (el) el.style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
 }
 
-async function testPrint() {
-  const { jsPDF } = window.jspdf;
-  const lebar = parseInt(document.getElementById('kertasLebar').value) || 80;
-  const doc = new jsPDF({ unit: 'mm', format: [lebar, 40] });
-  doc.setFontSize(10); doc.text('Test Print', 3, 10);
-  doc.setFontSize(8); doc.text('Printer: ' + document.getElementById('printerPilihan').value, 3, 18);
-  doc.text('Lebar: ' + lebar + 'mm', 3, 24);
-  doc.text(new Date().toLocaleString('id-ID'), 3, 30);
-  const blob = doc.output('blob');
-  const url = URL.createObjectURL(blob);
-  const pw = window.open(url, '_blank');
-  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-}
-
-function aturHakAkses() {
-  const isAdmin = currentUser && currentUser.role === 'admin';
-  document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('manajemenUserSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('manajemenDataSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('thAksi').style.display = isAdmin ? '' : 'none';
-  if (activeTab === 'inventory') refreshProductList();
-}
-
-function lihatDetailProduk(barcode) {
-  (async () => {
-    const p = await getProductByBarcode(barcode);
-    if (!p) return;
-    document.getElementById('detailNama').textContent = p.nama || '';
-    document.getElementById('detailBarcode').textContent = p.barcode || '';
-    document.getElementById('detailKategori').textContent = p.kategori || '-';
-    document.getElementById('detailKeterangan').textContent = p.keterangan || '-';
-    document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
-    document.getElementById('detailStok').textContent = p.stok || 0;
-    const img = document.getElementById('detailFoto');
-    if (p.foto) { img.src = p.foto; img.style.display = 'block'; } else img.style.display = 'none';
-    document.getElementById('productDetailModal').style.display = 'flex';
-  })();
-}
-
+// Fungsi untuk membuka dialog pilih folder
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
     workingDirHandle = d;
     document.getElementById('folderPath').textContent = d.name;
-    alert('Dipilih');
+    alert('Folder kerja dipilih');
   } catch (e) {
-    if (e.name !== 'AbortError') alert('Gagal');
+    if (e.name !== 'AbortError') alert('Gagal memilih folder');
   }
 }
 
+// Backup & restore (placeholder)
 async function backupData() {
-  // Implementasi backup ZIP bisa ditambahkan
+  alert('Fitur backup akan segera hadir.');
 }
-
 async function restoreData() {
-  // Implementasi restore ZIP bisa ditambahkan
+  alert('Fitur restore akan segera hadir.');
 }
