@@ -1,16 +1,26 @@
+// ===================== APP INIT =====================
+let activeTab = 'transaksi';
+
 // Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register("data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })");
+    navigator.serviceWorker.register(
+      "data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })"
+    );
   });
 }
 
-// Session check
-window.addEventListener('DOMContentLoaded', () => {
-  checkSession();
+// Prevent back button
+window.addEventListener('popstate', (e) => {
+  if (confirm('Keluar dari aplikasi?')) {
+    logout();
+  } else {
+    history.pushState(null, null, location.href);
+  }
 });
+history.pushState(null, null, location.href);
 
-// Tab navigation
+// Navigasi Tab
 document.querySelectorAll('.tab-btn').forEach(b => {
   b.addEventListener('click', () => {
     if (!currentUser) return;
@@ -20,26 +30,29 @@ document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.add('active');
     activeTab = b.dataset.page;
     if (activeTab === 'laporan') { setDefaultDateFilter(); muatLaporan(); }
-    if (activeTab === 'setting') { muatProfilToko(); tampilkanUserList(); aturHakAkses(); }
+    if (activeTab === 'setting') {
+      muatProfilToko();
+      tampilkanUserList();
+      aturHakAkses();
+    }
     if (activeTab === 'inventory') refreshProductList();
     if (activeTab === 'transaksi') document.getElementById('scanInputTrans').focus();
   });
 });
 
-// Prevent back
-window.addEventListener('popstate', (e) => {
-  if (confirm('Keluar dari aplikasi?')) { logout(); } else { history.pushState(null, null, location.href); }
-});
-history.pushState(null, null, location.href);
-
 // Init
 async function initApp() {
   const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
   if (!admin) {
-    await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_HASH, role: 'admin' });
+    await supabaseClient.from('users').upsert({
+      username: 'admin',
+      password_hash: ADMIN_HASH,
+      role: 'admin'
+    });
   }
   if (!checkSession()) {
     document.getElementById('loginOverlay').style.display = 'flex';
   }
 }
+
 initApp();

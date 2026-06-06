@@ -1,4 +1,4 @@
-// ===================== FILE: js/setting.js =====================
+// ===================== SETTING / PROFILE & CETAK =====================
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -60,13 +60,19 @@ async function simpanProfil() {
   if (!logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
-      logo = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(fi.files[0]); });
+      logo = await toBase64(fi.files[0]);
     } else {
       const s = await getSettings();
       logo = s.logo || null;
     }
   }
-  await updateSettings({ nama, alamat, telp, logo, footer, kertas_lebar: kertasLebar, jenis_kertas: jenisKertas, printer, label_width: lw, label_height: lh, label_gap: lg, label_cols: lc });
+  await updateSettings({
+    nama, alamat, telp, logo, footer,
+    kertas_lebar: kertasLebar,
+    jenis_kertas: jenisKertas,
+    printer,
+    label_width: lw, label_height: lh, label_gap: lg, label_cols: lc
+  });
   alert('Profil disimpan');
   logoTokoDihapus = false;
   document.getElementById('tokoLogo').value = '';
@@ -89,26 +95,85 @@ async function simpanPengaturanCetak() {
 }
 
 function toggleLabelSettings() {
-  const el = document.getElementById('labelSettings');
-  if (el) el.style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
+  document.getElementById('labelSettings').style.display =
+    document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
 }
 
-// Fungsi untuk membuka dialog pilih folder
+// ===================== HAK AKSES =====================
+function aturHakAkses() {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  const profil = document.getElementById('manajemenProfilSection');
+  const user = document.getElementById('manajemenUserSection');
+  const data = document.getElementById('manajemenDataSection');
+  if (profil) profil.style.display = isAdmin ? 'block' : 'none';
+  if (user) user.style.display = isAdmin ? 'block' : 'none';
+  if (data) data.style.display = isAdmin ? 'block' : 'none';
+  const thAksi = document.getElementById('thAksi');
+  if (thAksi) thAksi.style.display = isAdmin ? '' : 'none';
+  if (activeTab === 'inventory') refreshProductList();
+}
+
+// ===================== BACKUP / RESTORE =====================
+async function backupData() {
+  const zip = new JSZip();
+  const products = await getAllProducts();
+  zip.file('products.json', JSON.stringify(products));
+  const trans = await getAllTransactions();
+  zip.file('transactions.json', JSON.stringify(trans));
+  const { data: users } = await supabaseClient.from('users').select('*');
+  zip.file('users.json', JSON.stringify(users));
+  const settings = await getSettings();
+  zip.file('settings.json', JSON.stringify(settings));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `backup_${new Date().toISOString().slice(0, 10)}.zip`;
+  a.click();
+}
+
+async function restoreData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const zip = await JSZip.loadAsync(file);
+    if (zip.files['products.json']) {
+      const text = await zip.files['products.json'].async('text');
+      const products = JSON.parse(text);
+      for (let p of products) await upsertProduct(p);
+    }
+    if (zip.files['transactions.json']) {
+      const text = await zip.files['transactions.json'].async('text');
+      const trans = JSON.parse(text);
+      for (let t of trans) await insertTransaction(t);
+    }
+    if (zip.files['users.json']) {
+      const text = await zip.files['users.json'].async('text');
+      const users = JSON.parse(text);
+      for (let u of users) {
+        await supabaseClient.from('users').upsert(u);
+      }
+    }
+    if (zip.files['settings.json']) {
+      const text = await zip.files['settings.json'].async('text');
+      const settings = JSON.parse(text);
+      await updateSettings(settings);
+    }
+    alert('Restore selesai');
+    location.reload();
+  };
+  input.click();
+}
+
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
     workingDirHandle = d;
     document.getElementById('folderPath').textContent = d.name;
-    alert('Folder kerja dipilih');
+    alert('Dipilih');
   } catch (e) {
-    if (e.name !== 'AbortError') alert('Gagal memilih folder');
+    if (e.name !== 'AbortError') alert('Gagal');
   }
-}
-
-// Backup & restore (placeholder)
-async function backupData() {
-  alert('Fitur backup akan segera hadir.');
-}
-async function restoreData() {
-  alert('Fitur restore akan segera hadir.');
 }
