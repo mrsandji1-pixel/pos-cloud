@@ -1,12 +1,13 @@
 // ===================== APP.JS =====================
-let activeTab = 'transaksi';
-
 // Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register("data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })");
   });
 }
+
+// Global activeTab (hanya deklarasi di sini)
+let activeTab = 'transaksi';
 
 // Navigation
 document.querySelectorAll('.tab-btn').forEach(b => {
