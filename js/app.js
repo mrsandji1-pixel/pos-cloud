@@ -1,12 +1,10 @@
-// ===================== APP INIT =====================
-let activeTab = 'transaksi';
+// ===================== APP.JS (INISIALISASI & NAVIGASI) =====================
+// activeTab sudah dideklarasikan di supabase-config.js, jadi jangan deklarasi ulang di sini
 
-// Service Worker
+// Service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(
-      "data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })"
-    );
+    navigator.serviceWorker.register("data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })");
   });
 }
 
@@ -20,7 +18,26 @@ window.addEventListener('popstate', (e) => {
 });
 history.pushState(null, null, location.href);
 
-// Navigasi Tab
+// Warning before unload
+window.addEventListener('beforeunload', (e) => {
+  if (typeof cart !== 'undefined' && cart && cart.length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// Inisialisasi
+async function initApp() {
+  const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
+  if (!admin) {
+    await supabaseClient.from('users').upsert({ username: 'admin', password_hash: ADMIN_HASH, role: 'admin' });
+  }
+  if (!checkSession()) {
+    document.getElementById('loginOverlay').style.display = 'flex';
+  }
+}
+
+// Navigasi tab
 document.querySelectorAll('.tab-btn').forEach(b => {
   b.addEventListener('click', () => {
     if (!currentUser) return;
@@ -28,8 +45,11 @@ document.querySelectorAll('.tab-btn').forEach(b => {
     document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
     document.getElementById('page-' + b.dataset.page).classList.add('active');
     b.classList.add('active');
-    activeTab = b.dataset.page;
-    if (activeTab === 'laporan') { setDefaultDateFilter(); muatLaporan(); }
+    activeTab = b.dataset.page; // activeTab dideklarasikan di supabase-config.js
+    if (activeTab === 'laporan') {
+      setDefaultDateFilter();
+      muatLaporan();
+    }
     if (activeTab === 'setting') {
       muatProfilToko();
       tampilkanUserList();
@@ -39,20 +59,5 @@ document.querySelectorAll('.tab-btn').forEach(b => {
     if (activeTab === 'transaksi') document.getElementById('scanInputTrans').focus();
   });
 });
-
-// Init
-async function initApp() {
-  const { data: admin } = await supabaseClient.from('users').select('*').eq('username', 'admin').single();
-  if (!admin) {
-    await supabaseClient.from('users').upsert({
-      username: 'admin',
-      password_hash: ADMIN_HASH,
-      role: 'admin'
-    });
-  }
-  if (!checkSession()) {
-    document.getElementById('loginOverlay').style.display = 'flex';
-  }
-}
 
 initApp();

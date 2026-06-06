@@ -68,9 +68,10 @@ async function hapusTransaksi(noInv) {
     await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]);
     alert('Transaksi dihapus');
     muatLaporan();
-  } catch (e) { alert('Gagal menghapus: ' + e.message); }
+  } catch (e) {
+    alert('Gagal menghapus: ' + e.message);
+  }
 }
-
 function renderChart(trans, mode, start, end) {
   if (chartInstance) chartInstance.destroy();
   const ctx = document.getElementById('chartPenjualan')?.getContext('2d');

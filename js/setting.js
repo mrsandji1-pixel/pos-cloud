@@ -1,4 +1,6 @@
-// ===================== SETTING / PROFILE & CETAK =====================
+// ===================== SETTING.JS =====================
+
+// Profil Toko
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -60,7 +62,11 @@ async function simpanProfil() {
   if (!logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
-      logo = await toBase64(fi.files[0]);
+      logo = await new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result);
+        reader.readAsDataURL(fi.files[0]);
+      });
     } else {
       const s = await getSettings();
       logo = s.logo || null;
@@ -71,7 +77,10 @@ async function simpanProfil() {
     kertas_lebar: kertasLebar,
     jenis_kertas: jenisKertas,
     printer,
-    label_width: lw, label_height: lh, label_gap: lg, label_cols: lc
+    label_width: lw,
+    label_height: lh,
+    label_gap: lg,
+    label_cols: lc
   });
   alert('Profil disimpan');
   logoTokoDihapus = false;
@@ -95,25 +104,11 @@ async function simpanPengaturanCetak() {
 }
 
 function toggleLabelSettings() {
-  document.getElementById('labelSettings').style.display =
-    document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
+  const el = document.getElementById('labelSettings');
+  if (el) el.style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
 }
 
-// ===================== HAK AKSES =====================
-function aturHakAkses() {
-  const isAdmin = currentUser && currentUser.role === 'admin';
-  const profil = document.getElementById('manajemenProfilSection');
-  const user = document.getElementById('manajemenUserSection');
-  const data = document.getElementById('manajemenDataSection');
-  if (profil) profil.style.display = isAdmin ? 'block' : 'none';
-  if (user) user.style.display = isAdmin ? 'block' : 'none';
-  if (data) data.style.display = isAdmin ? 'block' : 'none';
-  const thAksi = document.getElementById('thAksi');
-  if (thAksi) thAksi.style.display = isAdmin ? '' : 'none';
-  if (activeTab === 'inventory') refreshProductList();
-}
-
-// ===================== BACKUP / RESTORE =====================
+// Backup / Restore (placeholder)
 async function backupData() {
   const zip = new JSZip();
   const products = await getAllProducts();
@@ -152,16 +147,14 @@ async function restoreData() {
     if (zip.files['users.json']) {
       const text = await zip.files['users.json'].async('text');
       const users = JSON.parse(text);
-      for (let u of users) {
-        await supabaseClient.from('users').upsert(u);
-      }
+      for (let u of users) await supabaseClient.from('users').upsert(u);
     }
     if (zip.files['settings.json']) {
       const text = await zip.files['settings.json'].async('text');
       const settings = JSON.parse(text);
       await updateSettings(settings);
     }
-    alert('Restore selesai');
+    alert('Restore selesai. Memuat ulang...');
     location.reload();
   };
   input.click();
@@ -172,8 +165,27 @@ async function pilihFolder() {
     const d = await window.showDirectoryPicker();
     workingDirHandle = d;
     document.getElementById('folderPath').textContent = d.name;
-    alert('Dipilih');
+    alert('Folder dipilih');
   } catch (e) {
-    if (e.name !== 'AbortError') alert('Gagal');
+    if (e.name !== 'AbortError') alert('Gagal: ' + e.message);
   }
+}
+
+function resetDatabase() {
+  if (confirm('Reset database akan menghapus SEMUA data di cloud. Lanjutkan?')) {
+    alert('Silakan lakukan reset melalui dashboard Supabase (SQL Editor).');
+  }
+}
+
+// Hak akses
+function aturHakAkses() {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  const sections = ['manajemenProfilSection', 'manajemenUserSection', 'manajemenDataSection'];
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? 'block' : 'none';
+  });
+  const thAksi = document.getElementById('thAksi');
+  if (thAksi) thAksi.style.display = isAdmin ? '' : 'none';
+  if (activeTab === 'inventory') refreshProductList();
 }
