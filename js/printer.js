@@ -4,16 +4,33 @@ let bluetoothCharacteristic = null;
 
 async function sambungPrinter() {
   try {
+    // Minta perangkat Bluetooth
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
     });
+
+    // Hubungkan ke GATT server
     const server = await bluetoothDevice.gatt.connect();
+    
+    // Dapatkan service printer (UUID umum untuk printer thermal)
     const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+    
+    // Dapatkan characteristic untuk mengirim data
     bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+    
     updateStatusPrinter(true);
     alert('Printer terhubung!');
     await simpanPengaturanCetak();
+
+    // Tangani jika koneksi terputus
+    bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+      updateStatusPrinter(false);
+      alert('Koneksi printer terputus');
+      bluetoothDevice = null;
+      bluetoothCharacteristic = null;
+    });
+
   } catch (e) {
     console.error(e);
     updateStatusPrinter(false);
@@ -62,10 +79,17 @@ async function cetakTeksKePrinter(teks) {
   }
   try {
     const encoder = new TextEncoder();
-    const data = encoder.encode(teks + '\n\n\n\n'); // tambah newline untuk memotong kertas
+    // Tambahkan perintah potong kertas (ESC/POS) jika diperlukan
+    const cutCommand = new Uint8Array([0x1D, 0x56, 0x41, 0x10]); // GS V A
+    const data = encoder.encode(teks);
+    const fullData = new Uint8Array(data.length + cutCommand.length);
+    fullData.set(data);
+    fullData.set(cutCommand, data.length);
+    
+    // Kirim per chunk (512 byte)
     const chunkSize = 512;
-    for (let i = 0; i < data.byteLength; i += chunkSize) {
-      const chunk = data.slice(i, i + chunkSize);
+    for (let i = 0; i < fullData.byteLength; i += chunkSize) {
+      const chunk = fullData.slice(i, i + chunkSize);
       await bluetoothCharacteristic.writeValue(chunk);
     }
     alert('Cetak berhasil');
@@ -111,10 +135,7 @@ async function testPrint() {
 
 // Fungsi untuk membuat struk teks (dari cart)
 function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
-  const lebar = parseInt(toko.kertas_lebar) || 80;
   let struk = '';
-
-  // Header
   struk += toko.nama || 'TOKO';
   struk += '\n';
   if (toko.alamat) {
@@ -143,6 +164,5 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
     struk += '\n' + toko.footer + '\n';
   }
   struk += '==============================\n';
-
   return struk;
 }
