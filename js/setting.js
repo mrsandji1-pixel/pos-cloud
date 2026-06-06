@@ -1,4 +1,6 @@
 // ===================== SETTING.JS =====================
+
+// Muat profil toko dari Supabase
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -20,13 +22,31 @@ async function muatProfilToko() {
     } else {
       document.getElementById('logoPreviewContainer').style.display = 'none';
     }
+  } else {
+    // Set default values
+    document.getElementById('tokoNama').value = '';
+    document.getElementById('tokoAlamat').value = '';
+    document.getElementById('tokoTelp').value = '';
+    document.getElementById('tokoFooter').value = '';
+    document.getElementById('kertasLebar').value = '80';
+    document.getElementById('jenisKertas').value = 'thermal';
+    document.getElementById('printerPilihan').value = 'default';
+    document.getElementById('labelWidth').value = 50;
+    document.getElementById('labelHeight').value = 30;
+    document.getElementById('labelGap').value = 3;
+    document.getElementById('labelCols').value = 1;
+    toggleLabelSettings();
+    document.getElementById('logoPreviewContainer').style.display = 'none';
   }
 }
 
+// Toggle label settings
 function toggleLabelSettings() {
-  document.getElementById('labelSettings').style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
+  const jenis = document.getElementById('jenisKertas').value;
+  document.getElementById('labelSettings').style.display = jenis === 'label' ? 'block' : 'none';
 }
 
+// Preview logo toko
 function previewLogoToko() {
   const f = document.getElementById('tokoLogo').files[0];
   if (f) {
@@ -40,6 +60,7 @@ function previewLogoToko() {
   }
 }
 
+// Hapus logo toko
 function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
@@ -47,6 +68,7 @@ function hapusLogoToko() {
   logoTokoDihapus = true;
 }
 
+// Simpan profil toko (admin only)
 async function simpanProfil() {
   if (!currentUser || currentUser.role !== 'admin') return;
   const nama = document.getElementById('tokoNama').value;
@@ -60,6 +82,7 @@ async function simpanProfil() {
   const lh = parseFloat(document.getElementById('labelHeight').value) || 30;
   const lg = parseFloat(document.getElementById('labelGap').value) || 3;
   const lc = parseInt(document.getElementById('labelCols').value) || 1;
+
   let logo = null;
   if (!logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
@@ -70,6 +93,7 @@ async function simpanProfil() {
       logo = s.logo || null;
     }
   }
+
   await updateSettings({
     nama, alamat, telp, logo, footer,
     kertas_lebar: kertasLebar,
@@ -77,12 +101,14 @@ async function simpanProfil() {
     printer,
     label_width: lw, label_height: lh, label_gap: lg, label_cols: lc
   });
-  alert('Profil disimpan');
+
+  alert('Profil disimpan!');
   logoTokoDihapus = false;
   document.getElementById('tokoLogo').value = '';
   await muatProfilToko();
 }
 
+// Simpan pengaturan cetak (semua user)
 async function simpanPengaturanCetak() {
   const s = await getSettings();
   await updateSettings({
@@ -95,9 +121,10 @@ async function simpanPengaturanCetak() {
     label_gap: parseFloat(document.getElementById('labelGap').value) || 3,
     label_cols: parseInt(document.getElementById('labelCols').value) || 1
   });
-  alert('Pengaturan cetak disimpan');
+  alert('Pengaturan cetak disimpan!');
 }
 
+// Atur hak akses berdasarkan role
 function aturHakAkses() {
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
@@ -107,17 +134,19 @@ function aturHakAkses() {
   if (activeTab === 'inventory') refreshProductList();
 }
 
+// Pilih folder kerja
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
     workingDirHandle = d;
     document.getElementById('folderPath').textContent = d.name;
-    alert('Dipilih');
+    alert('Folder dipilih!');
   } catch (e) {
-    if (e.name !== 'AbortError') alert('Gagal');
+    if (e.name !== 'AbortError') alert('Gagal memilih folder');
   }
 }
 
-async function backupData() { /* ... */ }
-async function restoreData() { /* ... */ }
-function resetDatabase() { if (confirm('Reset?')) { alert('Gunakan dashboard Supabase'); } }
+// Backup & Restore (placeholder)
+async function backupData() { alert('Fitur backup masih dalam pengembangan.'); }
+async function restoreData() { alert('Fitur restore masih dalam pengembangan.'); }
+function resetDatabase() { if (confirm('Reset semua data?')) { alert('Silakan gunakan dashboard Supabase untuk reset.'); } }

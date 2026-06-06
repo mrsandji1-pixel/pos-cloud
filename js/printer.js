@@ -1,4 +1,4 @@
-// ===================== PRINTER BLUETOOTH =====================
+// ===================== PRINTER.JS =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -27,7 +27,7 @@ async function putusPrinter() {
     bluetoothDevice = null;
     bluetoothCharacteristic = null;
     updateStatusPrinter(false);
-    alert('Koneksi printer diputus');
+    alert('Koneksi diputus');
   }
 }
 
@@ -47,26 +47,21 @@ function updateStatusPrinter(connected) {
 }
 
 async function cetakTeksKePrinter(teks) {
-  if (!bluetoothCharacteristic) {
-    alert('Printer tidak terhubung');
-    return;
-  }
+  if (!bluetoothCharacteristic) { alert('Printer tidak terhubung'); return; }
   try {
     const encoder = new TextEncoder();
-    const data = encoder.encode(teks + '\n\n\n\n\x1Bm'); // potong kertas
+    const data = encoder.encode(teks + '\n\n\n\n');
     const chunkSize = 512;
     for (let i = 0; i < data.byteLength; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize);
       await bluetoothCharacteristic.writeValue(chunk);
     }
-    alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
     alert('Gagal cetak: ' + e.message);
   }
 }
 
-// ... (sama seperti sebelumnya, dengan testPrint menggunakan charWidth) ...
 async function testPrint() {
   const lebar = parseInt(document.getElementById('kertasLebar')?.value) || 80;
   const charWidth = lebar === 80 ? 32 : 22;
@@ -108,12 +103,13 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const garisDouble = '='.repeat(charWidth);
 
   let struk = '';
-  // Nama toko di tengah
+  // Nama toko (center)
   if (toko.nama) {
     const nama = toko.nama.length > charWidth ? toko.nama.substring(0, charWidth) : toko.nama;
     const padding = Math.floor((charWidth - nama.length) / 2);
     struk += ' '.repeat(padding) + nama + '\n';
   }
+  // Alamat
   if (toko.alamat) {
     const alamat = toko.alamat.length > charWidth ? toko.alamat.substring(0, charWidth) : toko.alamat;
     struk += alamat + '\n';
@@ -125,32 +121,40 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
 
   // Header tabel
   const header = 'Item'.padEnd(12).substring(0,12) +
-                 'Qty'.padStart(4) +
+                 'Qty'.padStart(3) +
                  'Harga'.padStart(10) +
-                 'Sub'.padStart(8);
+                 'Sub'.padStart(10);
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
 
   // Item
   cart.forEach(item => {
     const nama = (item.nama || '').length > 12 ? item.nama.substring(0,12) : item.nama.padEnd(12);
-    const qty = item.qty.toString().padStart(4);
-    const harga = ('Rp' + item.harga.toLocaleString('id')).padStart(10);
-    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).padStart(8);
+    const qty = item.qty.toString().padStart(3);
+    const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-10).padStart(10);
+    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
     let row = nama + qty + harga + sub;
     if (row.length > charWidth) row = row.substring(0, charWidth);
     struk += row + '\n';
   });
 
   struk += garis + '\n';
-  const totalStr = 'Total : ' + ('Rp' + total.toLocaleString('id')).padStart(12);
-  const bayarStr = 'Bayar : ' + ('Rp' + bayar.toLocaleString('id')).padStart(12);
-  const kembaliStr = 'Kembali: ' + ('Rp' + kembali.toLocaleString('id')).padStart(12);
-  struk += totalStr + '\n' + bayarStr + '\n' + kembaliStr + '\n';
+
+  // Total, bayar, kembali
+  const totalStr = ('Rp' + total.toLocaleString('id')).slice(-10).padStart(10);
+  const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-10).padStart(10);
+  const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-10).padStart(10);
+
+  struk += 'Total   : ' + totalStr + '\n';
+  struk += 'Bayar   : ' + bayarStr + '\n';
+  struk += 'Kembali : ' + kembaliStr + '\n';
+
   if (toko.footer) {
     const footer = toko.footer.length > charWidth ? toko.footer.substring(0, charWidth) : toko.footer;
-    struk += '\n' + footer + '\n';
+    const padding = Math.floor((charWidth - footer.length) / 2);
+    struk += '\n' + ' '.repeat(padding) + footer + '\n';
   }
   struk += garisDouble + '\n';
+
   return struk;
 }
