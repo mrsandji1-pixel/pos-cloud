@@ -54,42 +54,95 @@ function updateStatusPrinter(connected) {
   });
 }
 
-async function cetakViaBluetooth(pdfBlob) {
+// Fungsi untuk mengirim teks ke printer Bluetooth
+async function cetakTeksKePrinter(teks) {
   if (!bluetoothCharacteristic) {
     alert('Printer tidak terhubung');
     return;
   }
   try {
-    const arrayBuffer = await pdfBlob.arrayBuffer();
+    const encoder = new TextEncoder();
+    const data = encoder.encode(teks + '\n\n\n\n'); // tambah newline untuk memotong kertas
     const chunkSize = 512;
-    for (let i = 0; i < arrayBuffer.byteLength; i += chunkSize) {
-      const chunk = arrayBuffer.slice(i, i + chunkSize);
+    for (let i = 0; i < data.byteLength; i += chunkSize) {
+      const chunk = data.slice(i, i + chunkSize);
       await bluetoothCharacteristic.writeValue(chunk);
     }
-    alert('Cetak via Bluetooth berhasil');
+    alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
     alert('Gagal cetak: ' + e.message);
   }
 }
 
+// Test print dengan teks
 async function testPrint() {
-  const { jsPDF } = window.jspdf;
   const lebar = parseInt(document.getElementById('kertasLebar')?.value) || 80;
-  const doc = new jsPDF({ unit: 'mm', format: [lebar, 40] });
-  doc.setFontSize(10);
-  doc.text('Test Print', 3, 10);
-  doc.setFontSize(8);
-  doc.text('Printer: ' + (document.getElementById('printerPilihan')?.value || 'default'), 3, 18);
-  doc.text('Lebar: ' + lebar + 'mm', 3, 24);
-  doc.text(new Date().toLocaleString('id-ID'), 3, 30);
-  const blob = doc.output('blob');
+  let teks = '';
+  teks += '====================\n';
+  teks += '   TEST PRINT\n';
+  teks += '====================\n';
+  teks += 'Printer: ' + (document.getElementById('printerPilihan')?.value || 'default') + '\n';
+  teks += 'Lebar  : ' + lebar + 'mm\n';
+  teks += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
+  teks += '====================\n';
+  teks += 'Jika teks ini tercetak\n';
+  teks += 'maka printer berfungsi\n';
+  teks += 'dengan baik.\n';
+  teks += '====================\n';
 
   if (bluetoothDevice && bluetoothCharacteristic) {
-    await cetakViaBluetooth(blob);
+    await cetakTeksKePrinter(teks);
   } else {
+    // Fallback: buka PDF di tab baru
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: [lebar, 40] });
+    doc.setFontSize(10);
+    doc.text('Test Print', 3, 10);
+    doc.text('Printer: ' + (document.getElementById('printerPilihan')?.value || 'default'), 3, 18);
+    doc.text('Lebar: ' + lebar + 'mm', 3, 24);
+    doc.text(new Date().toLocaleString('id-ID'), 3, 30);
+    const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     const pw = window.open(url, '_blank');
     if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
   }
+}
+
+// Fungsi untuk membuat struk teks (dari cart)
+function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
+  const lebar = parseInt(toko.kertas_lebar) || 80;
+  let struk = '';
+
+  // Header
+  struk += toko.nama || 'TOKO';
+  struk += '\n';
+  if (toko.alamat) {
+    struk += toko.alamat + '\n';
+  }
+  struk += 'No: ' + noInv + '\n';
+  struk += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
+  struk += 'Customer: ' + (cust || '-') + '\n';
+  struk += '------------------------------\n';
+  struk += 'Item          Qty  Harga   Sub\n';
+  struk += '------------------------------\n';
+
+  cart.forEach(item => {
+    const nama = item.nama.padEnd(12).substring(0, 12);
+    const qty = item.qty.toString().padStart(3);
+    const harga = ('Rp' + item.harga.toLocaleString('id')).padStart(8);
+    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).padStart(9);
+    struk += `${nama} ${qty} ${harga} ${sub}\n`;
+  });
+
+  struk += '------------------------------\n';
+  struk += 'Total : ' + ('Rp' + total.toLocaleString('id')).padStart(12) + '\n';
+  struk += 'Bayar : ' + ('Rp' + bayar.toLocaleString('id')).padStart(12) + '\n';
+  struk += 'Kembali: ' + ('Rp' + kembali.toLocaleString('id')).padStart(12) + '\n';
+  if (toko.footer) {
+    struk += '\n' + toko.footer + '\n';
+  }
+  struk += '==============================\n';
+
+  return struk;
 }

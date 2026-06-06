@@ -55,6 +55,8 @@ function updateQty(i,q) { q = parseInt(q)||1; if (q>cart[i].stok) { alert('Stok 
 function hapusCartItem(i) { cart.splice(i,1); renderCart(); }
 function hitungKembalian() { const t = parseInt(document.getElementById('totalCart').textContent.replace(/\D/g,''))||0, b = parseInt(document.getElementById('bayar').value)||0; document.getElementById('kembalian').textContent = Math.max(0,b-t).toLocaleString('id'); }
 
+// ... (fungsi setupTransaksi, tambahProdukKeCart, dll. tetap sama) ...
+
 async function bayarDanCetak() {
   if (!cart.length) { alert('Kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
@@ -66,6 +68,7 @@ async function bayarDanCetak() {
   const no = `INV-${now.toISOString().slice(0,10).replace(/-/g,'')}-${now.toTimeString().slice(0,8).replace(/:/g,'')}`;
   const trx = { no_invoice: no, tanggal: now.toISOString(), customer: cust, items: cart.map(i=>({ barcode:i.barcode, nama:i.nama, harga:i.harga, qty:i.qty, subtotal:i.harga*i.qty })), total, bayar, kembali };
   try {
+    // Kurangi stok
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -75,6 +78,8 @@ async function bayarDanCetak() {
     await insertTransaction(trx);
 
     const toko = await getSettings();
+
+    // Buat PDF (untuk fallback dan penyimpanan)
     const lebarKertas = parseInt(toko.kertas_lebar)||80;
     const marginKiri = 3, marginKanan = 3;
     const areaCetak = lebarKertas - marginKiri - marginKanan;
@@ -118,14 +123,18 @@ async function bayarDanCetak() {
       y+=8;
     }
     const pdfBlob = doc.output('blob');
+
+    // Upload PDF ke cloud
     await uploadInvoicePDF(no, pdfBlob);
+    // Simpan ke folder lokal (jika ada)
     if (workingDirHandle) {
       try { const fh = await workingDirHandle.getFileHandle(no+'.pdf',{create:true}); const w = await fh.createWritable(); await w.write(pdfBlob); await w.close(); } catch(e) {}
     }
 
-    // Bluetooth printing
+    // CETAK: jika printer Bluetooth terhubung, cetak teks; jika tidak, buka PDF
     if (bluetoothDevice && bluetoothCharacteristic) {
-      await cetakViaBluetooth(pdfBlob);
+      const teksStruk = buatStrukTeks(cart, total, bayar, kembali, toko, no, cust);
+      await cetakTeksKePrinter(teksStruk);
     } else {
       const url = URL.createObjectURL(pdfBlob);
       const pw = window.open(url, '_blank');
