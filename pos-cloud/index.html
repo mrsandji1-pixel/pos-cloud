@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>POS Retail Andal</title>
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlBPUyBSZXRhaWwgQW5kYWwiLAogICJzaG9ydF9uYW1lIjogIlBPUyIsCiAgInN0YXJ0X3VybCI6ICIuLyIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiI2ZmZiIsCiAgInRoZW1lX2NvbG9yIjogIiMwMDk2ODgiLAogICJvcmllbnRhdGlvbiI6ICJwb3J0cmFpdCIsCiAgImljb25zIjogW3sKICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhSb1pXMWxMemd2UGo0OGRkM0QzWkdSMmR5QmhiV1E5SW1Gdkx6SXdNaUF5TURBeExURTBMVEF3SURBd09qSXdPakF4SWo0OFBDOG5KejQ4TDJKeVBtSnZjbVJsY2p3dlptbHVZMmhoY3k4KyIKICB9XQp9" />
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <!-- TAB NAVIGASI -->
+  <div class="tabs">
+    <button class="tab-btn active" data-page="transaksi">Transaksi</button>
+    <button class="tab-btn" data-page="inventory">Inventory</button>
+    <button class="tab-btn" data-page="laporan">Laporan</button>
+    <button class="tab-btn" data-page="setting">Setting</button>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- ======================== TRANSAKSI ======================== -->
+  <div id="page-transaksi" class="page active">
+    <div class="form-group" style="position:relative;">
+      <label>Nama Customer (opsional)</label>
+      <input type="text" id="custName" placeholder="Nama Customer">
+      <button class="clear-btn" onclick="document.getElementById('custName').value=''">✕</button>
+    </div>
+    <div class="form-group" style="position:relative;">
+      <label>Cari Produk</label>
+      <input type="text" id="searchProduct" placeholder="Nama / Barcode..." oninput="searchProductFn(this.value)" onfocus="searchProductFn(this.value)" autocomplete="off" style="font-size:14px; padding:8px;">
+      <button class="clear-btn" onclick="document.getElementById('searchProduct').value='';document.getElementById('searchResults').style.display='none';" style="top:28px;">✕</button>
+      <div class="search-results" id="searchResults" style="display:none;"></div>
+    </div>
+    <div class="form-group">
+      <label>Scan Barcode</label>
+      <input type="text" id="scanInputTrans" placeholder="Scan barcode di sini..." autocomplete="off" style="font-size:14px; padding:8px;">
+    </div>
+    <table class="cart-table" id="cartTable">
+      <thead><tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="total-box">Total: Rp <span id="totalCart">0</span></div>
+    <div class="form-group">
+      <label>Pembayaran</label>
+      <div class="nominal-grid" id="nominalButtons"></div>
+      <input type="number" id="bayar" placeholder="Uang dibayar" oninput="hitungKembalian()" value="0">
+      <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
+    </div>
+    <div>Kembalian: Rp <span id="kembalian">0</span></div>
+    <div id="printerStatusTrans" class="printer-status" style="margin-top:8px;">
+      <span class="led led-red" id="ledTrans"></span>
+      <span id="printerStatusText">Printer tidak terhubung</span>
+      <button class="btn btn-sm btn-danger" id="btnPutusTrans" onclick="putusPrinter()" style="display:none;">Putus</button>
+    </div>
+    <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px; margin-top:8px;">💳 BAYAR & CETAK</button>
+  </div>
+
+  <!-- ======================== INVENTORY ======================== -->
+  <div id="page-inventory" class="page">
+    <div class="form-group">
+      <label>Barcode</label>
+      <input type="text" id="prodBarcode" placeholder="Scan barcode atau ketik manual..." autocomplete="off">
+      <button class="btn" onclick="cariAtauTambahProduk()" style="margin-top:4px;">Cari / Tambah Produk</button>
+    </div>
+    <div id="productForm" style="display:none;">
+      <h3 id="formTitle"></h3>
+      <div id="fotoPreviewContainer" style="text-align:center; margin-bottom:12px; display:none;">
+        <img id="fotoPreview" src="" alt="Foto Produk" style="max-width:150px; max-height:150px; border-radius:8px;">
+        <button class="btn btn-sm btn-danger" id="btnHapusFoto" onclick="hapusFoto()">🗑 Hapus Foto</button>
+      </div>
+      <div class="form-group"><label>Nama Produk</label><input type="text" id="prodNama"></div>
+      <div class="form-group"><label>Kategori</label><input type="text" id="prodKategori"></div>
+      <div class="form-group"><label>Keterangan</label><input type="text" id="prodKeterangan"></div>
+      <div class="form-group"><label>Harga Beli</label><input type="number" id="prodHargaBeli" step="1"></div>
+      <div class="form-group"><label>Harga Jual</label><input type="number" id="prodHargaJual" step="1"></div>
+      <div class="stok-info">Stok Saat Ini: <span id="stokSaatIni">0</span><br>
+        <label>Tambah/Kurangi Stok</label><input type="number" id="perubahanStok" value="0" oninput="hitungStokAkhir()"><br>
+        Stok Akhir: <span id="stokAkhir">0</span>
+      </div>
+      <div class="form-group"><label>Foto</label><input type="file" id="prodFoto" accept="image/*" onchange="previewFoto()"></div>
+      <button class="btn" id="btnSimpanProduk">Simpan</button>
+      <button class="btn btn-danger" id="btnHapusProduk" style="display:none;">Hapus Produk</button>
+    </div>
+    <hr>
+    <h3>Daftar Produk (<span id="productCount">0</span>)</h3>
+    <input type="text" id="invSearch" placeholder="Cari..." oninput="filterProductList()">
+    <button class="btn btn-sm" onclick="refreshProductList()">🔄 Refresh</button>
+    <div class="table-wrapper"><table class="product-table" id="productListTable"><thead><tr><th>Barcode</th><th>Nama</th><th>Kategori</th><th>Keterangan</th><th>Harga Jual</th><th>Stok</th><th id="thAksi">Aksi</th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <!-- ======================== LAPORAN ======================== -->
+  <div id="page-laporan" class="page">
+    <h3>Ringkasan</h3>
+    <div style="display:flex; gap:12px; margin-bottom:12px;">
+      <div style="flex:1; background:#e0f2f1; padding:10px; border-radius:8px;"><small>Total Transaksi</small><br><strong id="totalTransaksi">0</strong></div>
+      <div style="flex:1; background:#e0f2f1; padding:10px; border-radius:8px;"><small>Total Pendapatan</small><br><strong id="totalPendapatan">Rp 0</strong></div>
+    </div>
+    <div class="chart-container"><canvas id="chartPenjualan" style="max-height:250px;"></canvas></div>
+    <h4>Top Selling Products</h4>
+    <div class="chart-container" style="max-width:400px; margin:0 auto;"><canvas id="chartTopProducts" style="max-height:250px;"></canvas></div>
+    <hr>
+    <div class="filter-row">
+      <input type="date" id="tglAwal"> s/d <input type="date" id="tglAkhir">
+      <button class="btn btn-sm" onclick="filterToday()">Today</button>
+      <button class="btn btn-sm" onclick="filterThisWeek()">This Week</button>
+      <button class="btn btn-sm" onclick="filterMTD()">MTD</button>
+      <button class="btn btn-sm" onclick="filterYTD()">YTD</button>
+      <button class="btn btn-sm" onclick="muatLaporan()">Tampilkan</button>
+    </div>
+    <table class="report-table" id="reportTable"><thead><tr><th>No Invoice</th><th>Tanggal</th><th>Customer</th><th>Total</th><th>Aksi</th></tr></thead><tbody></tbody></table>
+    <button class="btn" onclick="exportCSV()">📥 Export CSV</button>
+  </div>
+
+  <!-- ======================== SETTING ======================== -->
+  <div id="page-setting" class="page">
+    <div id="manajemenProfilSection">
+      <h3>Manajemen Profil</h3>
+      <div id="logoPreviewContainer" style="margin-bottom:12px; display:none;">
+        <img id="logoPreview" class="logo-preview" src=""><br>
+        <button class="btn btn-sm btn-danger" id="btnHapusLogo" onclick="hapusLogoToko()">🗑 Hapus Logo</button>
+      </div>
+      <div class="form-group"><label>Nama Toko</label><input type="text" id="tokoNama"></div>
+      <div class="form-group"><label>Alamat</label><input type="text" id="tokoAlamat"></div>
+      <div class="form-group"><label>Telepon</label><input type="text" id="tokoTelp"></div>
+      <div class="form-group"><label>Logo Toko</label><input type="file" id="tokoLogo" accept="image/*" onchange="previewLogoToko()"></div>
+      <div class="form-group"><label>Footer Struk</label><textarea id="tokoFooter" rows="2" placeholder="Contoh: Terima kasih..."></textarea></div>
+      <button class="btn" id="btnSimpanProfil" onclick="simpanProfil()">Simpan Profil</button>
+      <hr>
+    </div>
+
+    <h3>Manajemen Cetak</h3>
+    <div class="form-group">
+      <label>Printer <button class="info-btn" onclick="alert('Untuk printer Bluetooth:\n1. Nyalakan printer dan pastikan dalam mode pairing.\n2. Buka Pengaturan Android > Bluetooth > pindai dan pasangkan dengan printer.\n3. Setelah terhubung, pilih "Bluetooth Printer" di dropdown.\n4. Saat mencetak, Android akan menanyakan printer tujuan.\n\nUntuk printer USB:\n1. Colokkan kabel OTG ke tablet.\n2. Sambungkan printer.\n3. Pilih "USB Printer".')">ℹ️</button></label>
+      <div style="display:flex; gap:4px;">
+        <select id="printerPilihan" style="flex:1;">
+          <option value="default">Default (bawaan browser)</option>
+          <option value="bluetooth">Bluetooth Printer</option>
+          <option value="usb">USB Printer</option>
+        </select>
+        <button class="btn btn-sm" onclick="sambungPrinter()">🔗 Sambung</button>
+        <button class="btn btn-sm" onclick="testPrint()" title="Cetak halaman uji">🖨️ Test</button>
+      </div>
+    </div>
+    <div id="printerStatusSetting" class="printer-status" style="margin-top:4px;">
+      <span class="led led-red" id="ledSetting"></span>
+      <span id="printerStatusSettingText">Tidak terhubung</span>
+      <button class="btn btn-sm btn-danger" id="btnPutusSetting" onclick="putusPrinter()" style="display:none;">Putus</button>
+    </div>
+    <div class="form-group"><label>Lebar Kertas</label>
+      <select id="kertasLebar">
+        <option value="80">80 mm</option>
+        <option value="58">58 mm</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Jenis Kertas</label>
+      <select id="jenisKertas" onchange="toggleLabelSettings()">
+        <option value="thermal">Thermal Plain (tanpa label)</option>
+        <option value="label">Thermal Label (stiker)</option>
+      </select>
+    </div>
+    <div id="labelSettings" style="display:none;">
+      <div class="form-group"><label>Lebar Label (mm)</label><input type="number" id="labelWidth" value="50" step="1"></div>
+      <div class="form-group"><label>Tinggi Label (mm)</label><input type="number" id="labelHeight" value="30" step="1"></div>
+      <div class="form-group"><label>Jarak Antar Label (mm)</label><input type="number" id="labelGap" value="3" step="0.5"></div>
+      <div class="form-group"><label>Jumlah Kolom</label><input type="number" id="labelCols" value="1" min="1" step="1"></div>
+      <p style="font-size:12px; color:#666;">Sesuaikan dengan stok label yang digunakan.</p>
+    </div>
+    <button class="btn" onclick="simpanPengaturanCetak()">Simpan Pengaturan Cetak</button>
+    <hr>
+
+    <div id="manajemenUserSection">
+      <h3>Manajemen User</h3>
+      <table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Aksi</th></tr></thead><tbody id="userListBody"></tbody></table>
+      <div style="margin-top:8px;"><input type="text" id="newUsername" placeholder="Username"><input type="password" id="newPassword" placeholder="Password"><select id="newRole"><option value="kasir">Kasir</option><option value="admin">Admin</option></select><button class="btn" id="btnTambahUser" onclick="tambahUser()">Tambah</button></div>
+      <hr>
+    </div>
+
+    <div id="manajemenDataSection">
+      <h3>Manajemen Data</h3>
+      <button class="btn" id="btnPilihFolder" onclick="pilihFolder()">📁 Pilih Folder Kerja</button>
+      <p>Folder aktif: <span id="folderPath">Belum dipilih</span></p>
+      <button class="btn" id="btnBackup" onclick="backupData()">⬇ Backup (ZIP)</button>
+      <button class="btn" id="btnRestore" onclick="restoreData()">⬆ Restore (dari ZIP)</button>
+      <button class="btn btn-danger" id="btnResetDB" onclick="resetDatabase()">🗑 Reset Database</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Overlay -->
+<div id="loginOverlay" class="overlay" style="display:flex;">
+  <div class="login-box">
+    <h2>Login</h2>
+    <input type="text" id="loginUser" placeholder="Username"><br><br>
+    <input type="password" id="loginPass" placeholder="Password"><br><br>
+    <button class="btn" onclick="login()">Masuk</button>
+    <p id="loginError" style="color:red;"></p>
+  </div>
+</div>
+
+<!-- Modal Edit User -->
+<div id="editUserModal" class="overlay" style="display:none;">
+  <div class="modal-content">
+    <h3>Edit User</h3>
+    <input type="hidden" id="editUsername">
+    <input type="text" id="editUsernameDisplay" disabled><br><br>
+    <input type="password" id="editPassword" placeholder="Password baru"><br><br>
+    <select id="editRole"><option value="kasir">Kasir</option><option value="admin">Admin</option></select><br><br>
+    <button class="btn" onclick="simpanEditUser()">Simpan</button> <button class="btn btn-danger" onclick="document.getElementById('editUserModal').style.display='none'">Batal</button>
+  </div>
+</div>
+
+<!-- Modal Detail Produk -->
+<div id="productDetailModal" class="overlay" style="display:none;">
+  <div class="modal-content" style="text-align:center;">
+    <h3 id="detailNama"></h3>
+    <img id="detailFoto" style="max-width:150px; display:none;"><br>
+    <p>Barcode: <span id="detailBarcode"></span></p>
+    <p>Kategori: <span id="detailKategori"></span></p>
+    <p>Keterangan: <span id="detailKeterangan"></span></p>
+    <p>Harga Jual: <span id="detailHargaJual"></span></p>
+    <p>Stok: <span id="detailStok"></span></p>
+    <button class="btn" onclick="document.getElementById('productDetailModal').style.display='none'">Tutup</button>
+  </div>
+</div>
+
+<script src="js/supabase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/transaksi.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/laporan.js"></script>
+<script src="js/setting.js"></script>
+<script src="js/printer.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
