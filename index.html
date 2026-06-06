@@ -49,10 +49,6 @@
     .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-width:400px; }
     .logo-preview { max-width:120px; max-height:120px; border-radius:8px; margin-bottom:8px; }
     .info-btn { background:none; border:none; font-size:18px; cursor:pointer; color:#009688; padding:0 4px; }
-    .led { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; }
-    .led-green { background:#4caf50; }
-    .led-red { background:#f44336; }
-    .printer-status { display:flex; align-items:center; margin-top:8px; }
   </style>
 </head>
 <body>
@@ -267,8 +263,8 @@
     });
   }
 
-  // ===================== KONFIGURASI SUPABASE =====================
-  const SUPABASE_URL = 'ttps://ikahekmyqvdugiljcrlp.supabase.co';   // GANTI
+  // ===================== KONFIGURASI SUPABASE (HARUS DI ATAS) =====================
+  const SUPABASE_URL = 'https://ikahekmyqvdugiljcrlp.supabase.co';   // GANTI
   const SUPABASE_ANON_KEY = 'sb_publishable_GjCb5njeiL6W8_HKA-OrLQ_e8dk7IIL'; // GANTI
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -278,8 +274,6 @@
   let chartInstance = null;
   let topProductsChart = null;
   let logoTokoDihapus = false;
-  let bluetoothDevice = null;
-  let bluetoothCharacteristic = null;
 
   // ===================== SESSION PERSISTENCE =====================
   function saveSession() {
@@ -767,7 +761,6 @@
         }
       }
       await deleteTransaction(noInv);
-      // Hapus file invoice (opsional)
       await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]);
       alert('Transaksi dihapus');
       muatLaporan();
