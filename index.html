@@ -49,6 +49,10 @@
     .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-width:400px; }
     .logo-preview { max-width:120px; max-height:120px; border-radius:8px; margin-bottom:8px; }
     .info-btn { background:none; border:none; font-size:18px; cursor:pointer; color:#009688; padding:0 4px; }
+    .led { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; }
+    .led-green { background:#4caf50; }
+    .led-red { background:#f44336; }
+    .printer-status { font-size:12px; margin-top:4px; display:flex; align-items:center; }
   </style>
 </head>
 <body>
@@ -91,6 +95,9 @@
     </div>
     <div>Kembalian: Rp <span id="kembalian">0</span></div>
     <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px;">💳 BAYAR & CETAK</button>
+    <!-- Indikator Printer di Transaksi -->
+    <div id="printerStatusTransaksi" class="printer-status" style="margin-top:8px;"></div>
+    <button class="btn btn-sm btn-danger" id="btnDisconnectTrans" style="display:none;" onclick="disconnectPrinter()">🔌 Putus Koneksi Printer</button>
   </div>
 
   <!-- INVENTORY -->
@@ -169,14 +176,16 @@
     <h3>Manajemen Cetak</h3>
     <div class="form-group">
       <label>Printer <button class="info-btn" onclick="alert('Untuk printer Bluetooth:\n1. Nyalakan printer dan pastikan dalam mode pairing.\n2. Buka Pengaturan Android > Bluetooth > pindai dan pasangkan dengan printer.\n3. Setelah terhubung, pilih "Bluetooth Printer" di dropdown.\n4. Saat mencetak, Android akan menanyakan printer tujuan.\n\nUntuk printer USB:\n1. Colokkan kabel OTG ke tablet.\n2. Sambungkan printer.\n3. Pilih "USB Printer".')">ℹ️</button></label>
-      <div style="display:flex; gap:4px;">
+      <div style="display:flex; gap:4px; align-items:center;">
         <select id="printerPilihan" style="flex:1;">
           <option value="default">Default (bawaan browser)</option>
           <option value="bluetooth">Bluetooth Printer</option>
           <option value="usb">USB Printer</option>
         </select>
-        <button class="btn btn-sm" onclick="testPrint()" title="Cetak halaman uji">🖨️ Test</button>
+        <button class="btn btn-sm" onclick="pairAndConnectPrinter()" id="btnPairPrinter">📱 Pair & Connect</button>
+        <button class="btn btn-sm" onclick="disconnectPrinter()" id="btnDisconnectSetting" style="display:none;">🔌 Putus</button>
       </div>
+      <div id="printerStatusSetting" class="printer-status" style="margin-top:4px;"></div>
     </div>
     <div class="form-group"><label>Lebar Kertas</label>
       <select id="kertasLebar">
@@ -275,6 +284,64 @@
   let topProductsChart = null;
   let logoTokoDihapus = false;
 
+  // ===================== BLUETOOTH PRINTER =====================
+  let printerDevice = null;
+  let printerCharacteristic = null;
+
+  // UUID untuk printer thermal BLE (contoh, sesuaikan dengan printer Anda)
+  const PRINTER_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb'; // Ganti
+  const PRINTER_CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb'; // Ganti
+
+  async function pairAndConnectPrinter() {
+    try {
+      document.getElementById('printerStatusSetting').innerHTML = '<span class="led led-red"></span> Menghubungkan...';
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [PRINTER_SERVICE_UUID] }],
+      });
+      printerDevice = device;
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(PRINTER_SERVICE_UUID);
+      printerCharacteristic = await service.getCharacteristic(PRINTER_CHAR_UUID);
+      updatePrinterStatus(true);
+      alert('Printer terhubung!');
+    } catch (e) {
+      console.error(e);
+      updatePrinterStatus(false);
+      alert('Gagal menghubungkan printer: ' + e.message);
+    }
+  }
+
+  function disconnectPrinter() {
+    if (printerDevice && printerDevice.gatt.connected) {
+      printerDevice.gatt.disconnect();
+    }
+    printerDevice = null;
+    printerCharacteristic = null;
+    updatePrinterStatus(false);
+  }
+
+  function updatePrinterStatus(connected) {
+    const statusSetting = document.getElementById('printerStatusSetting');
+    const statusTrans = document.getElementById('printerStatusTransaksi');
+    const btnDisconnectSetting = document.getElementById('btnDisconnectSetting');
+    const btnDisconnectTrans = document.getElementById('btnDisconnectTrans');
+    const btnPair = document.getElementById('btnPairPrinter');
+
+    if (connected) {
+      statusSetting.innerHTML = '<span class="led led-green"></span> Printer Terhubung';
+      statusTrans.innerHTML = '<span class="led led-green"></span> Printer Siap';
+      btnDisconnectSetting.style.display = 'inline-block';
+      btnDisconnectTrans.style.display = 'inline-block';
+      btnPair.style.display = 'none';
+    } else {
+      statusSetting.innerHTML = '<span class="led led-red"></span> Printer Tidak Terhubung';
+      statusTrans.innerHTML = '<span class="led led-red"></span> Printer Tidak Terhubung';
+      btnDisconnectSetting.style.display = 'none';
+      btnDisconnectTrans.style.display = 'none';
+      btnPair.style.display = 'inline-block';
+    }
+  }
+
   // ===================== SESSION PERSISTENCE =====================
   function saveSession() {
     if (currentUser) {
@@ -300,6 +367,7 @@
         setDefaultDateFilter();
         if (activeTab === 'laporan') muatLaporan();
         aturHakAkses();
+        updatePrinterStatus(false);
         return true;
       } catch (e) {
         clearSession();
@@ -371,6 +439,11 @@
 
   async function insertTransaction(trx) {
     const { error } = await supabaseClient.from('transactions').insert(trx);
+    if (error) throw error;
+  }
+
+  async function deleteTransaction(noInv) {
+    const { error } = await supabaseClient.from('transactions').delete().eq('no_invoice', noInv);
     if (error) throw error;
   }
 
@@ -598,6 +671,10 @@
   }
 
   async function testPrint() {
+    if (!printerCharacteristic) {
+      alert('Printer belum terhubung. Silakan pair & connect terlebih dahulu.');
+      return;
+    }
     const { jsPDF } = window.jspdf;
     const lebarKertas = parseInt(document.getElementById('kertasLebar').value) || 80;
     const doc = new jsPDF({ unit: 'mm', format: [lebarKertas, 40] });
@@ -608,9 +685,14 @@
     doc.text('Lebar: ' + lebarKertas + 'mm', 3, 24);
     doc.text(new Date().toLocaleString('id-ID'), 3, 30);
     const blob = doc.output('blob');
-    const url = URL.createObjectURL(blob);
-    const pw = window.open(url, '_blank');
-    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+    // Kirim ke printer BLE
+    const arrayBuffer = await blob.arrayBuffer();
+    try {
+      await printerCharacteristic.writeValue(new Uint8Array(arrayBuffer));
+      alert('Test print dikirim ke printer');
+    } catch (e) {
+      alert('Gagal mengirim ke printer: ' + e.message);
+    }
   }
 
   // ===================== TRANSAKSI =====================
@@ -748,15 +830,24 @@
 
       const pdfBlob = doc.output('blob');
       await uploadInvoicePDF(no, pdfBlob);
+
+      // Cetak ke printer BLE jika terhubung
+      if (printerCharacteristic) {
+        const arrayBuffer = await pdfBlob.arrayBuffer();
+        await printerCharacteristic.writeValue(new Uint8Array(arrayBuffer));
+      } else {
+        // Fallback: buka tab baru untuk cetak
+        const url = URL.createObjectURL(pdfBlob);
+        const pw = window.open(url, '_blank');
+        if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+      }
+
       if (workingDirHandle) {
         try {
           const fh = await workingDirHandle.getFileHandle(no + '.pdf', { create: true });
           const w = await fh.createWritable(); await w.write(pdfBlob); await w.close();
         } catch (e) { }
       }
-      const url = URL.createObjectURL(pdfBlob);
-      const pw = window.open(url, '_blank');
-      if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
 
       cart = []; renderCart();
       document.getElementById('bayar').value = '0'; document.getElementById('custName').value = ''; hitungKembalian();
@@ -882,13 +973,39 @@
     else {
       all.forEach(t => {
         const row = tbody.insertRow();
-        row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td><button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button> <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️</button></td>`;
+        row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
+          <button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button>
+          <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️</button>
+          <button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑️</button>
+        </td>`;
       });
     }
     document.getElementById('totalTransaksi').textContent = all.length;
     document.getElementById('totalPendapatan').textContent = 'Rp' + all.reduce((s, t) => s + t.total, 0).toLocaleString('id');
     renderChart(all, 'daily', a, b);
     renderTopProductsChart(all);
+  }
+
+  async function hapusTransaksi(noInv) {
+    if (!confirm('Hapus transaksi ini dan kembalikan stok?')) return;
+    // Ambil transaksi
+    const { data: trx } = await supabaseClient.from('transactions').select('*').eq('no_invoice', noInv).single();
+    if (!trx) return alert('Transaksi tidak ditemukan');
+    // Kembalikan stok
+    if (trx.items) {
+      for (let item of trx.items) {
+        const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', item.barcode).single();
+        if (prod) {
+          await supabaseClient.from('products').update({ stok: prod.stok + item.qty }).eq('barcode', item.barcode);
+        }
+      }
+    }
+    // Hapus transaksi
+    await deleteTransaction(noInv);
+    // Hapus invoice dari storage
+    await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]);
+    alert('Transaksi dihapus dan stok dikembalikan');
+    muatLaporan();
   }
 
   function renderChart(trans, mode, start, end) {
@@ -937,10 +1054,17 @@
 
   async function cetakUlang(no) {
     const url = await getInvoiceURL(no);
-    if (url) {
+    if (!url) return alert('Tidak tersedia');
+    if (printerCharacteristic) {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      await printerCharacteristic.writeValue(new Uint8Array(arrayBuffer));
+      alert('Dikirim ke printer');
+    } else {
       const pw = window.open(url, '_blank');
       if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-    } else viewInvoice(no);
+    }
   }
 
   function exportCSV() { /* ... */ }
@@ -999,6 +1123,7 @@
     if (!checkSession()) {
       document.getElementById('loginOverlay').style.display = 'flex';
     }
+    updatePrinterStatus(false);
   }
   initApp();
 </script>
