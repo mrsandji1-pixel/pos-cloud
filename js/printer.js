@@ -66,6 +66,7 @@ async function cetakTeksKePrinter(teks) {
   }
 }
 
+// ... (sama seperti sebelumnya, dengan testPrint menggunakan charWidth) ...
 async function testPrint() {
   const lebar = parseInt(document.getElementById('kertasLebar')?.value) || 80;
   const charWidth = lebar === 80 ? 32 : 22;

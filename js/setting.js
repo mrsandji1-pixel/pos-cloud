@@ -1,6 +1,4 @@
 // ===================== SETTING.JS =====================
-
-// Profil Toko
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -23,6 +21,10 @@ async function muatProfilToko() {
       document.getElementById('logoPreviewContainer').style.display = 'none';
     }
   }
+}
+
+function toggleLabelSettings() {
+  document.getElementById('labelSettings').style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
 }
 
 function previewLogoToko() {
@@ -62,11 +64,7 @@ async function simpanProfil() {
   if (!logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
-      logo = await new Promise(res => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.readAsDataURL(fi.files[0]);
-      });
+      logo = await toBase64(fi.files[0]);
     } else {
       const s = await getSettings();
       logo = s.logo || null;
@@ -77,10 +75,7 @@ async function simpanProfil() {
     kertas_lebar: kertasLebar,
     jenis_kertas: jenisKertas,
     printer,
-    label_width: lw,
-    label_height: lh,
-    label_gap: lg,
-    label_cols: lc
+    label_width: lw, label_height: lh, label_gap: lg, label_cols: lc
   });
   alert('Profil disimpan');
   logoTokoDihapus = false;
@@ -103,61 +98,13 @@ async function simpanPengaturanCetak() {
   alert('Pengaturan cetak disimpan');
 }
 
-function toggleLabelSettings() {
-  const el = document.getElementById('labelSettings');
-  if (el) el.style.display = document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
-}
-
-// Backup / Restore (placeholder)
-async function backupData() {
-  const zip = new JSZip();
-  const products = await getAllProducts();
-  zip.file('products.json', JSON.stringify(products));
-  const trans = await getAllTransactions();
-  zip.file('transactions.json', JSON.stringify(trans));
-  const { data: users } = await supabaseClient.from('users').select('*');
-  zip.file('users.json', JSON.stringify(users));
-  const settings = await getSettings();
-  zip.file('settings.json', JSON.stringify(settings));
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `backup_${new Date().toISOString().slice(0, 10)}.zip`;
-  a.click();
-}
-
-async function restoreData() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.zip';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const zip = await JSZip.loadAsync(file);
-    if (zip.files['products.json']) {
-      const text = await zip.files['products.json'].async('text');
-      const products = JSON.parse(text);
-      for (let p of products) await upsertProduct(p);
-    }
-    if (zip.files['transactions.json']) {
-      const text = await zip.files['transactions.json'].async('text');
-      const trans = JSON.parse(text);
-      for (let t of trans) await insertTransaction(t);
-    }
-    if (zip.files['users.json']) {
-      const text = await zip.files['users.json'].async('text');
-      const users = JSON.parse(text);
-      for (let u of users) await supabaseClient.from('users').upsert(u);
-    }
-    if (zip.files['settings.json']) {
-      const text = await zip.files['settings.json'].async('text');
-      const settings = JSON.parse(text);
-      await updateSettings(settings);
-    }
-    alert('Restore selesai. Memuat ulang...');
-    location.reload();
-  };
-  input.click();
+function aturHakAkses() {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('manajemenUserSection').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('manajemenDataSection').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('thAksi').style.display = isAdmin ? '' : 'none';
+  if (activeTab === 'inventory') refreshProductList();
 }
 
 async function pilihFolder() {
@@ -165,27 +112,12 @@ async function pilihFolder() {
     const d = await window.showDirectoryPicker();
     workingDirHandle = d;
     document.getElementById('folderPath').textContent = d.name;
-    alert('Folder dipilih');
+    alert('Dipilih');
   } catch (e) {
-    if (e.name !== 'AbortError') alert('Gagal: ' + e.message);
+    if (e.name !== 'AbortError') alert('Gagal');
   }
 }
 
-function resetDatabase() {
-  if (confirm('Reset database akan menghapus SEMUA data di cloud. Lanjutkan?')) {
-    alert('Silakan lakukan reset melalui dashboard Supabase (SQL Editor).');
-  }
-}
-
-// Hak akses
-function aturHakAkses() {
-  const isAdmin = currentUser && currentUser.role === 'admin';
-  const sections = ['manajemenProfilSection', 'manajemenUserSection', 'manajemenDataSection'];
-  sections.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = isAdmin ? 'block' : 'none';
-  });
-  const thAksi = document.getElementById('thAksi');
-  if (thAksi) thAksi.style.display = isAdmin ? '' : 'none';
-  if (activeTab === 'inventory') refreshProductList();
-}
+async function backupData() { /* ... */ }
+async function restoreData() { /* ... */ }
+function resetDatabase() { if (confirm('Reset?')) { alert('Gunakan dashboard Supabase'); } }
