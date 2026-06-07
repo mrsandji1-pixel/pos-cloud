@@ -80,9 +80,8 @@ async function testPrint() {
   } else {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: [lebar, 40] });
-    doc.setFontSize(10);
-    doc.text('Test Print', 3, 10);
-    doc.text('Printer: ' + (document.getElementById('printerPilihan')?.value || 'default'), 3, 18);
+    doc.setFontSize(10); doc.text('Test Print', 3, 10);
+    doc.setFontSize(8); doc.text('Printer: ' + (document.getElementById('printerPilihan')?.value || 'default'), 3, 18);
     doc.text('Lebar: ' + lebar + 'mm', 3, 24);
     doc.text(new Date().toLocaleString('id-ID'), 3, 30);
     const blob = doc.output('blob');
@@ -97,31 +96,22 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const charWidth = lebar === 80 ? 32 : 22;
   const garis = '-'.repeat(charWidth);
   const garisDouble = '='.repeat(charWidth);
-
   let struk = '';
   if (toko.nama) {
     const nama = toko.nama.length > charWidth ? toko.nama.substring(0, charWidth) : toko.nama;
     const padding = Math.floor((charWidth - nama.length) / 2);
     struk += ' '.repeat(padding) + nama + '\n';
   }
-  if (toko.alamat) {
-    const alamat = toko.alamat.length > charWidth ? toko.alamat.substring(0, charWidth) : toko.alamat;
-    struk += alamat + '\n';
-  }
+  if (toko.alamat) struk += toko.alamat.substring(0, charWidth) + '\n';
   struk += 'No: ' + noInv + '\n';
   struk += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
   struk += 'Customer: ' + (cust || '-') + '\n';
   struk += garis + '\n';
-
-  const header = 'Item'.padEnd(12).substring(0,12) +
-                 'Qty'.padStart(3) +
-                 'Harga'.padStart(10) +
-                 'Sub'.padStart(10);
+  const header = 'Item'.padEnd(12).substring(0, 12) + 'Qty'.padStart(3) + 'Harga'.padStart(10) + 'Sub'.padStart(10);
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
-
   cart.forEach(item => {
-    const nama = (item.nama || '').length > 12 ? item.nama.substring(0,12) : item.nama.padEnd(12);
+    const nama = (item.nama || '').length > 12 ? item.nama.substring(0, 12) : item.nama.padEnd(12);
     const qty = item.qty.toString().padStart(3);
     const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-10).padStart(10);
     const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
@@ -129,7 +119,6 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
     if (row.length > charWidth) row = row.substring(0, charWidth);
     struk += row + '\n';
   });
-
   struk += garis + '\n';
   const totalStr = ('Rp' + total.toLocaleString('id')).slice(-10).padStart(10);
   const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-10).padStart(10);
@@ -137,13 +126,11 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += 'Total   : ' + totalStr + '\n';
   struk += 'Bayar   : ' + bayarStr + '\n';
   struk += 'Kembali : ' + kembaliStr + '\n';
-
   if (toko.footer) {
     const footer = toko.footer.length > charWidth ? toko.footer.substring(0, charWidth) : toko.footer;
     const padding = Math.floor((charWidth - footer.length) / 2);
     struk += '\n' + ' '.repeat(padding) + footer + '\n';
   }
   struk += garisDouble + '\n';
-
   return struk;
 }

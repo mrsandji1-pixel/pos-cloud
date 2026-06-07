@@ -1,15 +1,12 @@
 // ===================== APP.JS =====================
-// Hanya deklarasi activeTab di sini!
 let activeTab = 'transaksi';
 
-// Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register("data:application/javascript;base64,self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))) })");
   });
 }
 
-// Navigation
 document.querySelectorAll('.tab-btn').forEach(b => {
   b.addEventListener('click', () => {
     if (!currentUser) return;
@@ -25,14 +22,12 @@ document.querySelectorAll('.tab-btn').forEach(b => {
   });
 });
 
-// Prevent back button
 window.addEventListener('popstate', (e) => {
   if (confirm('Keluar dari aplikasi?')) { logout(); }
   else { history.pushState(null, null, location.href); }
 });
 history.pushState(null, null, location.href);
 
-// Check session on load
 function initApp() {
   checkSession();
 }
