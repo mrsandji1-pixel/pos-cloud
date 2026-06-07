@@ -1,4 +1,5 @@
 // ===================== SETTING.JS =====================
+// Muat profil toko dari Supabase
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -20,14 +21,31 @@ async function muatProfilToko() {
     } else {
       document.getElementById('logoPreviewContainer').style.display = 'none';
     }
+  } else {
+    // Set default values
+    document.getElementById('tokoNama').value = '';
+    document.getElementById('tokoAlamat').value = '';
+    document.getElementById('tokoTelp').value = '';
+    document.getElementById('tokoFooter').value = '';
+    document.getElementById('kertasLebar').value = '80';
+    document.getElementById('jenisKertas').value = 'thermal';
+    document.getElementById('printerPilihan').value = 'default';
+    document.getElementById('labelWidth').value = 50;
+    document.getElementById('labelHeight').value = 30;
+    document.getElementById('labelGap').value = 3;
+    document.getElementById('labelCols').value = 1;
+    toggleLabelSettings();
+    document.getElementById('logoPreviewContainer').style.display = 'none';
   }
 }
 
+// Toggle label settings
 function toggleLabelSettings() {
   const jenis = document.getElementById('jenisKertas').value;
   document.getElementById('labelSettings').style.display = jenis === 'label' ? 'block' : 'none';
 }
 
+// Preview logo toko
 function previewLogoToko() {
   const f = document.getElementById('tokoLogo').files[0];
   if (f) {
@@ -41,6 +59,7 @@ function previewLogoToko() {
   }
 }
 
+// Hapus logo toko
 function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
@@ -48,6 +67,7 @@ function hapusLogoToko() {
   logoTokoDihapus = true;
 }
 
+// Simpan profil toko (admin only)
 async function simpanProfil() {
   if (!currentUser || currentUser.role !== 'admin') return;
   const nama = document.getElementById('tokoNama').value;
@@ -87,6 +107,7 @@ async function simpanProfil() {
   await muatProfilToko();
 }
 
+// Simpan pengaturan cetak (semua user)
 async function simpanPengaturanCetak() {
   const s = await getSettings();
   await updateSettings({
@@ -102,6 +123,7 @@ async function simpanPengaturanCetak() {
   alert('Pengaturan cetak disimpan!');
 }
 
+// Atur hak akses berdasarkan role
 function aturHakAkses() {
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
@@ -111,6 +133,7 @@ function aturHakAkses() {
   if (activeTab === 'inventory') refreshProductList();
 }
 
+// Pilih folder kerja
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
@@ -122,6 +145,97 @@ async function pilihFolder() {
   }
 }
 
-async function backupData() { alert('Fitur backup masih dalam pengembangan.'); }
-async function restoreData() { alert('Fitur restore masih dalam pengembangan.'); }
-function resetDatabase() { if (confirm('Reset semua data?')) { alert('Silakan gunakan dashboard Supabase untuk reset.'); } }
+// ========== BACKUP DATA (tanpa PDF) ==========
+async function backupData() {
+  try {
+    const zip = new JSZip();
+    
+    // Ambil semua data dari Supabase
+    const { data: users } = await supabaseClient.from('users').select('*');
+    const { data: products } = await supabaseClient.from('products').select('*');
+    const { data: transactions } = await supabaseClient.from('transactions').select('*');
+    const { data: settings } = await supabaseClient.from('settings').select('*');
+
+    zip.file('users.json', JSON.stringify(users || []));
+    zip.file('products.json', JSON.stringify(products || []));
+    zip.file('transactions.json', JSON.stringify(transactions || []));
+    zip.file('settings.json', JSON.stringify(settings || []));
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `backup_${new Date().toISOString().slice(0, 10)}.zip`;
+    a.click();
+  } catch (e) {
+    alert('Gagal backup: ' + e.message);
+  }
+}
+
+// ========== RESTORE DATA (tanpa PDF) ==========
+async function restoreData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const zip = await JSZip.loadAsync(file);
+      let restored = { users: 0, products: 0, transactions: 0, settings: 0 };
+
+      // Restore users
+      if (zip.files['users.json']) {
+        const text = await zip.files['users.json'].async('text');
+        const users = JSON.parse(text);
+        if (users.length > 0) {
+          // Hapus dulu user lama kecuali admin? Hati-hati, kita bisa upsert
+          const { error } = await supabaseClient.from('users').upsert(users, { onConflict: 'username' });
+          if (!error) restored.users = users.length;
+        }
+      }
+
+      // Restore products
+      if (zip.files['products.json']) {
+        const text = await zip.files['products.json'].async('text');
+        const products = JSON.parse(text);
+        if (products.length > 0) {
+          const { error } = await supabaseClient.from('products').upsert(products, { onConflict: 'barcode' });
+          if (!error) restored.products = products.length;
+        }
+      }
+
+      // Restore transactions
+      if (zip.files['transactions.json']) {
+        const text = await zip.files['transactions.json'].async('text');
+        const transactions = JSON.parse(text);
+        if (transactions.length > 0) {
+          const { error } = await supabaseClient.from('transactions').upsert(transactions, { onConflict: 'no_invoice' });
+          if (!error) restored.transactions = transactions.length;
+        }
+      }
+
+      // Restore settings
+      if (zip.files['settings.json']) {
+        const text = await zip.files['settings.json'].async('text');
+        const settings = JSON.parse(text);
+        if (settings.length > 0) {
+          const { error } = await supabaseClient.from('settings').upsert(settings, { onConflict: 'id' });
+          if (!error) restored.settings = settings.length;
+        }
+      }
+
+      alert(`Restore berhasil!\nUsers: ${restored.users}\nProducts: ${restored.products}\nTransactions: ${restored.transactions}\nSettings: ${restored.settings}`);
+      location.reload();
+    } catch (err) {
+      alert('Gagal restore: ' + err.message);
+    }
+  };
+  input.click();
+}
+
+function resetDatabase() {
+  if (confirm('Reset semua data? Semua data akan terhapus permanen.')) {
+    alert('Fitur reset harus dilakukan melalui dashboard Supabase. Hapus semua data di tabel secara manual.');
+  }
+}
