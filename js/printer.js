@@ -60,23 +60,16 @@ async function cetakTeksKePrinter(teks) {
     return;
   }
   try {
-    // Inisialisasi printer
-    const init = new Uint8Array([0x1B, 0x40]); // ESC @
-    await bluetoothCharacteristic.writeValue(init);
-
-    // Tambahkan perintah newline yang tepat: \r\n
-    const teksDenganCRLF = teks.replace(/\n/g, '\r\n');
+    // Inisialisasi printer (ESC/POS)
+    const init = '\x1B\x40'; // ESC @
+    const teksLengkap = init + teks + '\n\n\n\n\x1Bm'; // potong kertas
     const encoder = new TextEncoder();
-    const data = encoder.encode(teksDenganCRLF + '\r\n\r\n\r\n');
-    
+    const data = encoder.encode(teksLengkap);
     const chunkSize = 512;
     for (let i = 0; i < data.byteLength; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize);
       await bluetoothCharacteristic.writeValue(chunk);
     }
-    // Potong kertas (jika didukung)
-    const cut = new Uint8Array([0x1D, 0x56, 0x00]);
-    await bluetoothCharacteristic.writeValue(cut);
   } catch (e) {
     console.error(e);
     alert('Gagal cetak: ' + e.message);
@@ -131,10 +124,23 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const garisDouble = '='.repeat(charWidth);
 
   // Lebar kolom
-  const lebarItem = is80mm ? 21 : 10;
-  const lebarQty = is80mm ? 5 : 4;
-  const lebarHarga = is80mm ? 11 : 9;
-  const lebarSubtotal = is80mm ? 10 : 9;
+  let lebarItem, lebarQty, lebarHarga, lebarSubtotal, lebarLabel, lebarNilai;
+  if (is80mm) {
+    lebarItem = 21;
+    lebarQty = 5;
+    lebarHarga = 11;
+    lebarSubtotal = 10;
+    lebarLabel = 10;
+    lebarNilai = 12;
+  } else {
+    // 58mm
+    lebarItem = 11;
+    lebarQty = 3;
+    lebarHarga = 7;   // tanpa "Rp"
+    lebarSubtotal = 11; // dengan "Rp"
+    lebarLabel = 8;
+    lebarNilai = 9;
+  }
 
   let struk = '';
   // Nama toko (center)
@@ -143,7 +149,6 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
     const padding = Math.floor((charWidth - nama.length) / 2);
     struk += ' '.repeat(padding) + nama + '\n';
   }
-  // Alamat
   if (toko.alamat) {
     const alamat = toko.alamat.length > charWidth ? toko.alamat.substring(0, charWidth) : toko.alamat;
     struk += alamat + '\n';
@@ -154,36 +159,52 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += garis + '\n';
 
   // Header tabel
-  const header = 'Item'.padEnd(lebarItem).substring(0, lebarItem) +
-                 'Qty'.padStart(lebarQty) +
-                 'Harga'.padStart(lebarHarga) +
-                 'Sub'.padStart(lebarSubtotal);
+  const headerItem = 'Item'.padEnd(lebarItem).substring(0, lebarItem);
+  const headerQty = 'Qty'.padStart(lebarQty).substring(0, lebarQty);
+  const headerHarga = 'Harga'.padStart(lebarHarga).substring(0, lebarHarga);
+  const headerSub = 'Sub'.padStart(lebarSubtotal).substring(0, lebarSubtotal);
+  const header = headerItem + headerQty + headerHarga + headerSub;
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
 
   // Item
   cart.forEach(item => {
     const nama = (item.nama || '').length > lebarItem ? item.nama.substring(0, lebarItem) : item.nama.padEnd(lebarItem);
-    const qty = item.qty.toString().padStart(lebarQty);
-    const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-lebarHarga).padStart(lebarHarga);
-    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-lebarSubtotal).padStart(lebarSubtotal);
-    let row = nama + qty + harga + sub;
+    const qty = item.qty.toString();
+    // Qty center
+    const qtyPad = Math.floor((lebarQty - qty.length) / 2);
+    const qtyStr = ' '.repeat(qtyPad) + qty + ' '.repeat(lebarQty - qty.length - qtyPad);
+
+    let hargaStr, subStr;
+    if (is80mm) {
+      hargaStr = ('Rp' + item.harga.toLocaleString('id')).slice(-lebarHarga).padStart(lebarHarga);
+      subStr = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-lebarSubtotal).padStart(lebarSubtotal);
+    } else {
+      // 58mm: Harga tanpa "Rp"
+      hargaStr = item.harga.toLocaleString('id').padStart(lebarHarga);
+      // Subtotal dengan "Rp"
+      const subValue = 'Rp' + (item.harga * item.qty).toLocaleString('id');
+      subStr = subValue.slice(-lebarSubtotal).padStart(lebarSubtotal);
+    }
+
+    let row = nama + qtyStr + hargaStr + subStr;
     if (row.length > charWidth) row = row.substring(0, charWidth);
     struk += row + '\n';
   });
 
   struk += garis + '\n';
 
-  // Total, bayar, kembali
-  const lebarNilai = is80mm ? 12 : 9;
-  const labelWidth = is80mm ? 10 : 9;
-  const totalStr = ('Rp' + total.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
-  const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
-  const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
+  // Total, Bayar, Kembali
+  const labelTotal = 'Total'.padEnd(lebarLabel);
+  const labelBayar = 'Bayar'.padEnd(lebarLabel);
+  const labelKembali = 'Kembali'.padEnd(lebarLabel);
+  const nilaiTotal = ('Rp' + total.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
+  const nilaiBayar = ('Rp' + bayar.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
+  const nilaiKembali = ('Rp' + kembali.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
 
-  struk += 'Total'.padEnd(labelWidth) + ': ' + totalStr + '\n';
-  struk += 'Bayar'.padEnd(labelWidth) + ': ' + bayarStr + '\n';
-  struk += 'Kembali'.padEnd(labelWidth) + ': ' + kembaliStr + '\n';
+  struk += labelTotal + ': ' + nilaiTotal + '\n';
+  struk += labelBayar + ': ' + nilaiBayar + '\n';
+  struk += labelKembali + ': ' + nilaiKembali + '\n';
 
   if (toko.footer) {
     const footer = toko.footer.length > charWidth ? toko.footer.substring(0, charWidth) : toko.footer;
