@@ -41,4 +41,3 @@ input, select, textarea { width:100%; padding:10px; font-size:16px; border:1px s
 .led-green { background:#4caf50; }
 .led-red { background:#f44336; }
 .printer-status { display:flex; align-items:center; margin-top:8px; }
-.table-wrapper { overflow-x:auto; }
