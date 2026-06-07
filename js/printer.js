@@ -126,10 +126,10 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   // Lebar kolom
   let lebarItem, lebarQty, lebarHarga, lebarSubtotal, lebarLabel, lebarNilai;
   if (is80mm) {
-    lebarItem = 21;
+    lebarItem = 22;
     lebarQty = 5;
-    lebarHarga = 11;
-    lebarSubtotal = 10;
+    lebarHarga = 9;
+    lebarSubtotal = 11;
     lebarLabel = 10;
     lebarNilai = 12;
   } else {
@@ -162,7 +162,7 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const headerItem = 'Item'.padEnd(lebarItem).substring(0, lebarItem);
   const headerQty = 'Qty'.padStart(lebarQty).substring(0, lebarQty);
   const headerHarga = 'Harga'.padStart(lebarHarga).substring(0, lebarHarga);
-  const headerSub = 'Sub'.padStart(lebarSubtotal).substring(0, lebarSubtotal);
+  const headerSub = 'Subtotal'.padStart(lebarSubtotal).substring(0, lebarSubtotal);
   const header = headerItem + headerQty + headerHarga + headerSub;
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
