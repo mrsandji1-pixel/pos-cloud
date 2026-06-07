@@ -73,7 +73,6 @@ async function cetakTeksKePrinter(teks) {
   }
 }
 
-// Ambil lebar kertas dari pengaturan yang sudah disimpan
 async function getLebarKertasAktif() {
   const settings = await getSettings();
   return parseInt(settings.kertas_lebar) || 80;
@@ -81,7 +80,7 @@ async function getLebarKertasAktif() {
 
 async function testPrint() {
   const lebar = await getLebarKertasAktif();
-  const charWidth = lebar === 80 ? 32 : 22;
+  const charWidth = lebar === 80 ? 42 : 22; // 42 karakter untuk 80mm
   const garis = '='.repeat(charWidth);
 
   let teks = '';
@@ -116,7 +115,7 @@ async function testPrint() {
 
 function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const lebar = parseInt(toko.kertas_lebar) || 80;
-  const charWidth = lebar === 80 ? 32 : 22;
+  const charWidth = lebar === 80 ? 42 : 22; // 42 karakter untuk 80mm
   const garis = '-'.repeat(charWidth);
   const garisDouble = '='.repeat(charWidth);
 
@@ -138,19 +137,19 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += garis + '\n';
 
   // Header tabel
-  const header = 'Item'.padEnd(12).substring(0,12) +
-                 'Qty'.padStart(3) +
-                 'Harga'.padStart(10) +
-                 'Sub'.padStart(10);
+  const header = 'Item'.padEnd(14).substring(0,14) +
+                 'Qty'.padStart(4) +
+                 'Harga'.padStart(12) +
+                 'Subtotal'.padStart(12);
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
 
   // Item
   cart.forEach(item => {
-    const nama = (item.nama || '').length > 12 ? item.nama.substring(0,12) : item.nama.padEnd(12);
-    const qty = item.qty.toString().padStart(3);
-    const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-10).padStart(10);
-    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
+    const nama = (item.nama || '').length > 14 ? item.nama.substring(0,14) : item.nama.padEnd(14);
+    const qty = item.qty.toString().padStart(4);
+    const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-12).padStart(12);
+    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-12).padStart(12);
     let row = nama + qty + harga + sub;
     if (row.length > charWidth) row = row.substring(0, charWidth);
     struk += row + '\n';
@@ -159,9 +158,9 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += garis + '\n';
 
   // Total, bayar, kembali
-  const totalStr = ('Rp' + total.toLocaleString('id')).slice(-10).padStart(10);
-  const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-10).padStart(10);
-  const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-10).padStart(10);
+  const totalStr = ('Rp' + total.toLocaleString('id')).slice(-12).padStart(12);
+  const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-12).padStart(12);
+  const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-12).padStart(12);
 
   struk += 'Total   : ' + totalStr + '\n';
   struk += 'Bayar   : ' + bayarStr + '\n';
