@@ -80,7 +80,8 @@ async function getLebarKertasAktif() {
 
 async function testPrint() {
   const lebar = await getLebarKertasAktif();
-  const charWidth = lebar === 80 ? 42 : 22; // 42 karakter untuk 80mm
+  // 58mm = 22 karakter, 80mm = 47 karakter
+  const charWidth = lebar === 80 ? 47 : 22;
   const garis = '='.repeat(charWidth);
 
   let teks = '';
@@ -88,12 +89,12 @@ async function testPrint() {
   teks += '   TEST PRINT\n';
   teks += garis + '\n';
   teks += 'Printer: ' + (document.getElementById('printerPilihan')?.value || 'default') + '\n';
-  teks += 'Lebar  : ' + lebar + 'mm\n';
+  teks += 'Lebar  : ' + lebar + 'mm (' + charWidth + ' karakter)\n';
   teks += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
   teks += garis + '\n';
-  teks += 'Jika teks ini tercetak\n';
-  teks += 'maka printer berfungsi\n';
-  teks += 'dengan baik.\n';
+  teks += 'Jika teks ini tercetak dengan benar\n';
+  teks += 'maka printer berfungsi baik.\n';
+  teks += 'Setting karakter sudah sesuai.\n';
   teks += garis + '\n';
 
   if (bluetoothDevice && bluetoothCharacteristic) {
@@ -115,7 +116,7 @@ async function testPrint() {
 
 function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const lebar = parseInt(toko.kertas_lebar) || 80;
-  const charWidth = lebar === 80 ? 42 : 22; // 42 karakter untuk 80mm
+  const charWidth = lebar === 80 ? 47 : 22;
   const garis = '-'.repeat(charWidth);
   const garisDouble = '='.repeat(charWidth);
 
@@ -137,19 +138,19 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += garis + '\n';
 
   // Header tabel
-  const header = 'Item'.padEnd(14).substring(0,14) +
-                 'Qty'.padStart(4) +
+  const header = 'Item'.padEnd(23).substring(0,23) +   // lebih lebar untuk 80mm
+                 'Qty'.padStart(6) +
                  'Harga'.padStart(12) +
-                 'Subtotal'.padStart(12);
+                 'Subtotal'.padStart(10);
   struk += header.substring(0, charWidth) + '\n';
   struk += garis + '\n';
 
   // Item
   cart.forEach(item => {
-    const nama = (item.nama || '').length > 14 ? item.nama.substring(0,14) : item.nama.padEnd(14);
-    const qty = item.qty.toString().padStart(4);
+    const nama = (item.nama || '').length > 23 ? item.nama.substring(0,23) : item.nama.padEnd(23);
+    const qty = item.qty.toString().padStart(6);
     const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-12).padStart(12);
-    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-12).padStart(12);
+    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
     let row = nama + qty + harga + sub;
     if (row.length > charWidth) row = row.substring(0, charWidth);
     struk += row + '\n';
@@ -162,9 +163,9 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-12).padStart(12);
   const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-12).padStart(12);
 
-  struk += 'Total   : ' + totalStr + '\n';
-  struk += 'Bayar   : ' + bayarStr + '\n';
-  struk += 'Kembali : ' + kembaliStr + '\n';
+  struk += 'Total     : ' + totalStr + '\n';
+  struk += 'Bayar     : ' + bayarStr + '\n';
+  struk += 'Kembali   : ' + kembaliStr + '\n';
 
   if (toko.footer) {
     const footer = toko.footer.length > charWidth ? toko.footer.substring(0, charWidth) : toko.footer;
