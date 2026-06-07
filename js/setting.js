@@ -1,5 +1,4 @@
 // ===================== SETTING.JS =====================
-// Muat profil toko dari Supabase
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -115,6 +114,7 @@ async function simpanPengaturanCetak() {
     label_cols: parseInt(document.getElementById('labelCols').value) || 1
   });
   alert('Pengaturan cetak disimpan!');
+  // Langsung terapkan lebar kertas ke test print dan struk
 }
 
 function aturHakAkses() {

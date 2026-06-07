@@ -27,7 +27,7 @@ async function putusPrinter() {
     bluetoothDevice = null;
     bluetoothCharacteristic = null;
     updateStatusPrinter(false);
-    alert('Koneksi diputus');
+    alert('Koneksi printer diputus');
   }
 }
 
@@ -36,18 +36,29 @@ function updateStatusPrinter(connected) {
     { led: 'ledTrans', text: 'printerStatusText', btn: 'btnPutusTrans' },
     { led: 'ledSetting', text: 'printerStatusTextSetting', btn: 'btnPutusSetting' }
   ];
+
   elements.forEach(el => {
     const led = document.getElementById(el.led);
     const text = document.getElementById(el.text);
     const btn = document.getElementById(el.btn);
-    if (led) led.className = `led ${connected ? 'led-green' : 'led-red'}`;
-    if (text) text.textContent = connected ? 'Printer terhubung' : 'Printer tidak terhubung';
-    if (btn) btn.style.display = connected ? 'inline-block' : 'none';
+
+    if (led) {
+      led.className = `led ${connected ? 'led-green' : 'led-red'}`;
+    }
+    if (text) {
+      text.textContent = connected ? 'Printer terhubung' : 'Printer tidak terhubung';
+    }
+    if (btn) {
+      btn.style.display = connected ? 'inline-block' : 'none';
+    }
   });
 }
 
 async function cetakTeksKePrinter(teks) {
-  if (!bluetoothCharacteristic) { alert('Printer tidak terhubung'); return; }
+  if (!bluetoothCharacteristic) {
+    alert('Printer tidak terhubung');
+    return;
+  }
   try {
     const encoder = new TextEncoder();
     const data = encoder.encode(teks + '\n\n\n\n');
@@ -62,10 +73,17 @@ async function cetakTeksKePrinter(teks) {
   }
 }
 
+// Ambil lebar kertas dari pengaturan yang sudah disimpan
+async function getLebarKertasAktif() {
+  const settings = await getSettings();
+  return parseInt(settings.kertas_lebar) || 80;
+}
+
 async function testPrint() {
-  const lebar = parseInt(document.getElementById('kertasLebar')?.value) || 80;
+  const lebar = await getLebarKertasAktif();
   const charWidth = lebar === 80 ? 32 : 22;
   const garis = '='.repeat(charWidth);
+
   let teks = '';
   teks += garis + '\n';
   teks += '   TEST PRINT\n';
