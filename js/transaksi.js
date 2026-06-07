@@ -1,5 +1,6 @@
-// ===================== TRANSAKSI.JS =====================
+// ===================== TRANSAKSI.JS (Optimasi Kecepatan) =====================
 let cart = [];
+let searchTimer = null;
 
 function setupTransaksi() {
   const nominalDiv = document.getElementById('nominalButtons');
@@ -9,6 +10,7 @@ function setupTransaksi() {
     btn.onclick = () => { document.getElementById('bayar').value = (parseInt(document.getElementById('bayar').value)||0) + n; hitungKembalian(); };
     nominalDiv.appendChild(btn);
   });
+
   document.getElementById('scanInputTrans').onkeydown = e => {
     if (e.key==='Enter') { e.preventDefault(); const b = e.target.value.trim(); if (b) { e.target.value=''; tambahProdukKeCart(b); } }
   };
@@ -17,7 +19,10 @@ function setupTransaksi() {
 async function tambahProdukKeCart(barcode) {
   let p = await getProductByBarcode(barcode);
   if (!p) { const clean = barcode.replace(/[^a-zA-Z0-9\-_]/g,''); if (clean!==barcode) p = await getProductByBarcode(clean); }
-  if (!p) { const all = await getAllProducts(); p = all.find(x => x.barcode.includes(barcode)||barcode.includes(x.barcode)||x.nama.toLowerCase().includes(barcode.toLowerCase())); }
+  if (!p) {
+    const { data } = await supabaseClient.from('products').select('*').ilike('nama', `%${barcode}%`).limit(1);
+    p = data?.[0] || null;
+  }
   if (!p) { alert('Produk tidak ditemukan'); return; }
   if (p.stok <= 0) { alert('Stok habis'); return; }
   const ex = cart.find(i => i.barcode === p.barcode);
@@ -26,18 +31,59 @@ async function tambahProdukKeCart(barcode) {
   renderCart();
 }
 
-async function searchProductFn(query) {
+// Pencarian dengan debounce dan query server-side (jauh lebih cepat)
+function searchProductFn(query) {
+  clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
-  if (!query||query.length<1) { div.style.display='none'; return; }
-  const all = await getAllProducts(); const q = query.toLowerCase();
-  const filtered = all.filter(p => (p.nama||'').toLowerCase().includes(q)||(p.barcode||'').toLowerCase().includes(q)||(p.kategori||'').toLowerCase().includes(q)).slice(0,10);
-  if (!filtered.length) { div.innerHTML='<div class="search-item">Tidak ditemukan</div>'; div.style.display='block'; return; }
-  div.innerHTML = filtered.map(p => `<div class="search-item" data-barcode="${p.barcode}">${p.foto?`<img src="${p.foto}" class="search-item-img">`:'<div class="search-item-img" style="background:#e0e0e0;display:flex;align-items:center;justify-content:center;">📦</div>'}<div><strong>${p.nama}</strong><br><small>${p.barcode} | Stok:${p.stok} | Rp${(p.harga_jual||0).toLocaleString('id')}</small></div></div>`).join('');
-  div.style.display='block';
-  div.querySelectorAll('.search-item[data-barcode]').forEach(i => { i.onclick = () => { div.style.display='none'; document.getElementById('searchProduct').value=''; tambahProdukKeCart(i.dataset.barcode); }; });
+  if (!query || query.length < 2) { div.style.display = 'none'; return; }
+
+  searchTimer = setTimeout(async () => {
+    const q = query.trim();
+    const { data, error } = await supabaseClient
+      .from('products')
+      .select('*')
+      .or(`nama.ilike.%${q}%,barcode.ilike.%${q}%,kategori.ilike.%${q}%`)
+      .order('nama')
+      .limit(15);
+
+    if (error) {
+      console.error('Search error:', error);
+      div.innerHTML = '<div class="search-item">Gagal mencari</div>';
+      div.style.display = 'block';
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      div.innerHTML = '<div class="search-item">Tidak ditemukan</div>';
+      div.style.display = 'block';
+      return;
+    }
+
+    div.innerHTML = data.map(p => `
+      <div class="search-item" data-barcode="${p.barcode}">
+        ${p.foto ? `<img src="${p.foto}" class="search-item-img">` : '<div class="search-item-img" style="background:#e0e0e0;display:flex;align-items:center;justify-content:center;">📦</div>'}
+        <div>
+          <strong>${p.nama}</strong><br>
+          <small>${p.barcode} | Stok:${p.stok} | Rp${(p.harga_jual||0).toLocaleString('id')}</small>
+        </div>
+      </div>
+    `).join('');
+    div.style.display = 'block';
+
+    div.querySelectorAll('.search-item[data-barcode]').forEach(item => {
+      item.onclick = () => {
+        div.style.display = 'none';
+        document.getElementById('searchProduct').value = '';
+        tambahProdukKeCart(item.dataset.barcode);
+      };
+    });
+  }, 300);
 }
 
-document.addEventListener('click', e => { const s = document.getElementById('searchProduct'), r = document.getElementById('searchResults'); if (e.target!==s&&!r.contains(e.target)) r.style.display='none'; });
+document.addEventListener('click', e => {
+  const s = document.getElementById('searchProduct'), r = document.getElementById('searchResults');
+  if (e.target !== s && !r.contains(e.target)) r.style.display = 'none';
+});
 
 function renderCart() {
   const tbody = document.querySelector('#cartTable tbody'); tbody.innerHTML = ''; let total = 0;
@@ -66,7 +112,6 @@ async function bayarDanCetak() {
   const no = `INV-${now.toISOString().slice(0,10).replace(/-/g,'')}-${now.toTimeString().slice(0,8).replace(/:/g,'')}`;
   const trx = { no_invoice: no, tanggal: now.toISOString(), customer: cust, items: cart.map(i=>({ barcode:i.barcode, nama:i.nama, harga:i.harga, qty:i.qty, subtotal:i.harga*i.qty })), total, bayar, kembali };
   try {
-    // Kurangi stok
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -76,10 +121,9 @@ async function bayarDanCetak() {
     await insertTransaction(trx);
 
     const toko = await getSettings();
-
-    // Buat PDF untuk arsip
     const lebarKertas = parseInt(toko.kertas_lebar)||80;
     const marginKiri = 3, marginKanan = 3;
+    const areaCetak = lebarKertas - marginKiri - marginKanan;
     const xItem = marginKiri, xQty = lebarKertas*0.4, xHarga = lebarKertas*0.65, xSubtotal = lebarKertas-marginKanan;
     let tinggiHeader = 28; if (toko.logo) tinggiHeader = 40;
     const tinggiItem = cart.length*5;
@@ -116,7 +160,7 @@ async function bayarDanCetak() {
     doc.text('Kembali:', xItem, y); doc.text('Rp'+kembali.toLocaleString('id'), xSubtotal, y, { align:'right' }); y+=5;
     if (toko.footer) {
       doc.setFontSize(7);
-      doc.text(toko.footer, lebarKertas/2, y, { align:'center', maxWidth:lebarKertas-marginKiri-marginKanan });
+      doc.text(toko.footer, lebarKertas/2, y, { align:'center', maxWidth:areaCetak });
       y+=8;
     }
     const pdfBlob = doc.output('blob');
@@ -125,24 +169,17 @@ async function bayarDanCetak() {
       try { const fh = await workingDirHandle.getFileHandle(no+'.pdf',{create:true}); const w = await fh.createWritable(); await w.write(pdfBlob); await w.close(); } catch(e) {}
     }
 
-    // Cetak teks ke Bluetooth atau tampilkan PDF
     if (bluetoothDevice && bluetoothCharacteristic) {
       const teksStruk = buatStrukTeks(cart, total, bayar, kembali, toko, no, cust);
       await cetakTeksKePrinter(teksStruk);
     } else {
       const blobUrl = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
-      a.href = blobUrl;
-      a.target = '_blank';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a.href = blobUrl; a.target = '_blank'; a.style.display = 'none';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => {
-        const printWindow = window.open(blobUrl, '_blank');
-        if (printWindow) {
-          printWindow.addEventListener('load', () => printWindow.print(), { once: true });
-        }
+        const pw = window.open(blobUrl, '_blank');
+        if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
       }, 500);
     }
 
