@@ -11,35 +11,38 @@ function setDefaultDateFilter() {
 function filterToday() { setDefaultDateFilter(); muatLaporan(); }
 function filterThisWeek() {
   const n = new Date(), d = n.getDay(), s = new Date(n);
-  s.setDate(n.getDate()-d+(d===0?-6:1));
-  const e = new Date(s); e.setDate(s.getDate()+6);
+  s.setDate(n.getDate() - d + (d === 0 ? -6 : 1));
+  const e = new Date(s); e.setDate(s.getDate() + 6);
   document.getElementById('tglAwal').value = s.toISOString().slice(0,10);
   document.getElementById('tglAkhir').value = e.toISOString().slice(0,10);
   muatLaporan();
 }
 function filterMTD() {
   const n = new Date();
-  document.getElementById('tglAwal').value = new Date(n.getFullYear(),n.getMonth(),1).toISOString().slice(0,10);
+  document.getElementById('tglAwal').value = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0,10);
   document.getElementById('tglAkhir').value = n.toISOString().slice(0,10);
   muatLaporan();
 }
 function filterYTD() {
   const n = new Date();
-  document.getElementById('tglAwal').value = new Date(n.getFullYear(),0,1).toISOString().slice(0,10);
+  document.getElementById('tglAwal').value = new Date(n.getFullYear(), 0, 1).toISOString().slice(0,10);
   document.getElementById('tglAkhir').value = n.toISOString().slice(0,10);
   muatLaporan();
 }
 
 async function muatLaporan() {
   const a = document.getElementById('tglAwal').value, b = document.getElementById('tglAkhir').value;
-  if (!a||!b) return;
-  const all = await getAllTransactions(a+'T00:00:00', b+'T23:59:59');
-  const tbody = document.querySelector('#reportTable tbody'); tbody.innerHTML = '';
-  if (!all.length) { tbody.innerHTML = '<tr><td colspan="5">Tidak ada</td></tr>'; }
-  else {
+  if (!a || !b) return;
+
+  const all = await getAllTransactions(a + 'T00:00:00', b + 'T23:59:59');
+  const tbody = document.querySelector('#reportTable tbody');
+  tbody.innerHTML = '';
+  if (!all.length) {
+    tbody.innerHTML = '<tr><td colspan="5">Tidak ada</td></tr>';
+  } else {
     all.forEach(t => {
       const row = tbody.insertRow();
-      row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer||'-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
+      row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
         <button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button>
         <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️</button>
         <button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>
@@ -47,7 +50,7 @@ async function muatLaporan() {
     });
   }
   document.getElementById('totalTransaksi').textContent = all.length;
-  document.getElementById('totalPendapatan').textContent = 'Rp'+all.reduce((s,t)=>s+t.total,0).toLocaleString('id');
+  document.getElementById('totalPendapatan').textContent = 'Rp' + all.reduce((s, t) => s + t.total, 0).toLocaleString('id');
   renderChart(all, 'daily', a, b);
   renderTopProductsChart(all);
 }
@@ -67,40 +70,173 @@ async function hapusTransaksi(noInv) {
     await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]);
     alert('Transaksi dihapus');
     muatLaporan();
-  } catch (e) { alert('Gagal: '+e.message); }
+  } catch (e) { alert('Gagal menghapus: ' + e.message); }
 }
 
+// ========== FUNGSI BARU: Buat PDF dari data transaksi ==========
+function generateInvoicePDF(trx) {
+  const { jsPDF } = window.jspdf;
+  const lebarKertas = 80; // default 80mm
+  const marginKiri = 3, marginKanan = 3;
+  const areaCetak = lebarKertas - marginKiri - marginKanan;
+  const xItem = marginKiri, xQty = lebarKertas * 0.4, xHarga = lebarKertas * 0.65, xSubtotal = lebarKertas - marginKanan;
+
+  let tinggiHeader = 28; // akan ditambah jika ada logo nanti
+  const tinggiItem = (trx.items || []).length * 5;
+  const tinggiTotalBayar = 15;
+  const tinggiFooter = trx.footer ? 12 : 0;
+  const marginBawah = 10;
+  const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + marginBawah;
+
+  const doc = new jsPDF({ unit: 'mm', format: [lebarKertas, tinggiTotal] });
+  let y = 8;
+
+  // Header
+  doc.setFontSize(9);
+  doc.text(trx.toko_nama || 'TOKO', marginKiri, y);
+  doc.setFontSize(7);
+  y += 5;
+  if (trx.toko_alamat) { doc.text(trx.toko_alamat, marginKiri, y); y += 5; }
+  doc.text('No: ' + trx.no_invoice, marginKiri, y); y += 5;
+  doc.text('Tanggal: ' + new Date(trx.tanggal).toLocaleString('id-ID'), marginKiri, y); y += 5;
+  doc.text('Customer: ' + (trx.customer || '-'), marginKiri, y); y += 8;
+
+  // Header tabel
+  doc.text('Item', xItem, y);
+  doc.text('Qty', xQty, y, { align: 'center' });
+  doc.text('Harga', xHarga, y, { align: 'right' });
+  doc.text('Subtotal', xSubtotal, y, { align: 'right' });
+  y += 4; doc.line(marginKiri, y, xSubtotal, y); y += 3;
+
+  // Item
+  (trx.items || []).forEach(item => {
+    doc.text(item.nama, xItem, y, { maxWidth: xQty - xItem - 2 });
+    doc.text(item.qty.toString(), xQty, y, { align: 'center' });
+    doc.text('Rp' + item.harga.toLocaleString('id'), xHarga, y, { align: 'right' });
+    doc.text('Rp' + (item.harga * item.qty).toLocaleString('id'), xSubtotal, y, { align: 'right' });
+    y += 5;
+  });
+  doc.line(marginKiri, y, xSubtotal, y); y += 4;
+
+  doc.text('Total:', xItem, y);
+  doc.text('Rp' + trx.total.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+  y += 5;
+  doc.text('Bayar:', xItem, y);
+  doc.text('Rp' + trx.bayar.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+  y += 5;
+  doc.text('Kembali:', xItem, y);
+  doc.text('Rp' + trx.kembali.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+  y += 5;
+
+  if (trx.toko_footer) {
+    doc.setFontSize(7);
+    doc.text(trx.toko_footer, lebarKertas / 2, y, { align: 'center', maxWidth: areaCetak });
+  }
+
+  return doc.output('blob');
+}
+
+// ========== View Invoice (dengan fallback generate ulang) ==========
+async function viewInvoice(noInv) {
+  // Coba ambil dari storage dulu
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    window.open(url, '_blank');
+    return;
+  }
+
+  // Jika tidak ada, generate ulang dari data transaksi
+  const trx = await getTransaction(noInv);
+  if (!trx) {
+    alert('Transaksi tidak ditemukan');
+    return;
+  }
+
+  // Ambil data toko untuk footer/nama
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama;
+  trx.toko_alamat = toko.alamat;
+  trx.toko_footer = toko.footer;
+
+  const pdfBlob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(pdfBlob);
+  window.open(blobUrl, '_blank');
+}
+
+// ========== Cetak Ulang (dengan fallback) ==========
+async function cetakUlang(noInv) {
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    const pw = window.open(url, '_blank');
+    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+    return;
+  }
+
+  // Fallback generate ulang
+  const trx = await getTransaction(noInv);
+  if (!trx) {
+    alert('Transaksi tidak ditemukan');
+    return;
+  }
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama;
+  trx.toko_alamat = toko.alamat;
+  trx.toko_footer = toko.footer;
+
+  const pdfBlob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(pdfBlob);
+  const pw = window.open(blobUrl, '_blank');
+  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+}
+
+// ========== Chart (tidak berubah) ==========
 function renderChart(trans, mode, start, end) {
   if (chartInstance) chartInstance.destroy();
   const ctx = document.getElementById('chartPenjualan')?.getContext('2d');
   if (!ctx) return;
   let labels, data;
-  if (mode==='hourly') {
-    const hourly = {}; trans.forEach(t => { const hr = new Date(t.tanggal).getHours(); hourly[hr] = (hourly[hr]||0)+t.total; });
-    labels = Array.from({length:24},(_,i)=>i+':00'); data = labels.map((_,i)=>hourly[i]||0);
-  } else if (mode==='daily') {
+  if (mode === 'hourly') {
+    const hourly = {}; trans.forEach(t => { const hr = new Date(t.tanggal).getHours(); hourly[hr] = (hourly[hr] || 0) + t.total; });
+    labels = Array.from({ length: 24 }, (_, i) => i + ':00');
+    data = labels.map((_, i) => hourly[i] || 0);
+  } else if (mode === 'daily') {
     const daily = {}; const s = new Date(start), e = new Date(end);
-    for (let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) { daily[d.toISOString().slice(0,10)]=0; }
-    trans.forEach(t => { const k = t.tanggal.slice(0,10); if (daily[k]!==undefined) daily[k] += t.total; });
-    const keys = Object.keys(daily).sort(); labels = keys.map(k => new Date(k).toLocaleDateString('id-ID',{day:'numeric',month:'short'})); data = keys.map(k=>daily[k]);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) { daily[d.toISOString().slice(0, 10)] = 0; }
+    trans.forEach(t => { const k = t.tanggal.slice(0, 10); if (daily[k] !== undefined) daily[k] += t.total; });
+    const keys = Object.keys(daily).sort();
+    labels = keys.map(k => new Date(k).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
+    data = keys.map(k => daily[k]);
   }
-  chartInstance = new Chart(ctx, { type:'bar', data:{labels, datasets:[{label:'Penjualan (Rp)',data,backgroundColor:'#009688',borderRadius:4}]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>'Rp'+v.toLocaleString('id')}}}} });
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Penjualan (Rp)', data, backgroundColor: '#009688', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => 'Rp' + v.toLocaleString('id') } } } }
+  });
 }
 
 function renderTopProductsChart(trans) {
   if (topProductsChart) topProductsChart.destroy();
   const ctx = document.getElementById('chartTopProducts')?.getContext('2d');
   if (!ctx) return;
-  const sales = {}; trans.forEach(t => { if (t.items) t.items.forEach(i => { const k = i.nama||i.barcode; if (!sales[k]) sales[k]={nama:i.nama,qty:0}; sales[k].qty += i.qty||1; }); });
-  const sorted = Object.values(sales).sort((a,b)=>b.qty-a.qty).slice(0,10);
-  const colors = ['#e53935','#1e88e5','#fdd835','#8e24aa','#fb8c00','#d81b60','#00acc1','#7cb342','#5e35b1','#ffb300'];
-  topProductsChart = new Chart(ctx, { type:'pie', data:{labels:sorted.map(p=>p.nama),datasets:[{data:sorted.map(p=>p.qty),backgroundColor:colors.slice(0,sorted.length),borderWidth:1}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:10}}}}} });
+  const sales = {}; trans.forEach(t => { if (t.items) t.items.forEach(i => { const k = i.nama || i.barcode; if (!sales[k]) sales[k] = { nama: i.nama, qty: 0 }; sales[k].qty += i.qty || 1; }); });
+  const sorted = Object.values(sales).sort((a, b) => b.qty - a.qty).slice(0, 10);
+  const colors = ['#e53935', '#1e88e5', '#fdd835', '#8e24aa', '#fb8c00', '#d81b60', '#00acc1', '#7cb342', '#5e35b1', '#ffb300'];
+  topProductsChart = new Chart(ctx, {
+    type: 'pie',
+    data: { labels: sorted.map(p => p.nama), datasets: [{ data: sorted.map(p => p.qty), backgroundColor: colors.slice(0, sorted.length), borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+  });
 }
 
-async function viewInvoice(no) { const url = await getInvoiceURL(no); if (url) window.open(url,'_blank'); else alert('Tidak tersedia'); }
-async function cetakUlang(no) {
-  const url = await getInvoiceURL(no);
-  if (url) { const pw = window.open(url,'_blank'); if (pw) pw.addEventListener('load', ()=>pw.print(),{once:true}); }
-  else viewInvoice(no);
+function exportCSV() {
+  const tbody = document.querySelector('#reportTable tbody');
+  let csv = 'No Invoice,Tanggal,Customer,Total\n';
+  tbody.querySelectorAll('tr').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length >= 4) {
+      csv += `"${cells[0].textContent}","${cells[1].textContent}","${cells[2].textContent}","${cells[3].textContent.replace('Rp ', '').replace(/\./g, '')}"\n`;
+    }
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'laporan.csv'; a.click();
 }
-function exportCSV() { alert('Export CSV belum diimplementasikan.'); }
