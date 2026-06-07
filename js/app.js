@@ -1,4 +1,7 @@
 // ===================== APP.JS =====================
+// HANYA SATU DEKLARASI activeTab
+let activeTab = 'transaksi';
+
 // Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -6,10 +9,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Global activeTab (hanya deklarasi di sini)
-let activeTab = 'transaksi';
-
-// Navigation
+// Navigasi tab
 document.querySelectorAll('.tab-btn').forEach(b => {
   b.addEventListener('click', () => {
     if (!currentUser) return;
@@ -25,15 +25,17 @@ document.querySelectorAll('.tab-btn').forEach(b => {
   });
 });
 
-// Prevent back button
+// Cegah back button
 window.addEventListener('popstate', (e) => {
   if (confirm('Keluar dari aplikasi?')) { logout(); }
   else { history.pushState(null, null, location.href); }
 });
 history.pushState(null, null, location.href);
 
-// Check session on load
+// Inisialisasi
 function initApp() {
-  checkSession();
+  if (!checkSession()) {
+    document.getElementById('loginOverlay').style.display = 'flex';
+  }
 }
 initApp();

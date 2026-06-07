@@ -1,6 +1,4 @@
 // ===================== SETTING.JS =====================
-
-// Muat profil toko dari Supabase
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -22,31 +20,14 @@ async function muatProfilToko() {
     } else {
       document.getElementById('logoPreviewContainer').style.display = 'none';
     }
-  } else {
-    // Set default values
-    document.getElementById('tokoNama').value = '';
-    document.getElementById('tokoAlamat').value = '';
-    document.getElementById('tokoTelp').value = '';
-    document.getElementById('tokoFooter').value = '';
-    document.getElementById('kertasLebar').value = '80';
-    document.getElementById('jenisKertas').value = 'thermal';
-    document.getElementById('printerPilihan').value = 'default';
-    document.getElementById('labelWidth').value = 50;
-    document.getElementById('labelHeight').value = 30;
-    document.getElementById('labelGap').value = 3;
-    document.getElementById('labelCols').value = 1;
-    toggleLabelSettings();
-    document.getElementById('logoPreviewContainer').style.display = 'none';
   }
 }
 
-// Toggle label settings
 function toggleLabelSettings() {
-  const jenis = document.getElementById('jenisKertas').value;
-  document.getElementById('labelSettings').style.display = jenis === 'label' ? 'block' : 'none';
+  document.getElementById('labelSettings').style.display =
+    document.getElementById('jenisKertas').value === 'label' ? 'block' : 'none';
 }
 
-// Preview logo toko
 function previewLogoToko() {
   const f = document.getElementById('tokoLogo').files[0];
   if (f) {
@@ -60,7 +41,6 @@ function previewLogoToko() {
   }
 }
 
-// Hapus logo toko
 function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
@@ -68,7 +48,6 @@ function hapusLogoToko() {
   logoTokoDihapus = true;
 }
 
-// Simpan profil toko (admin only)
 async function simpanProfil() {
   if (!currentUser || currentUser.role !== 'admin') return;
   const nama = document.getElementById('tokoNama').value;
@@ -108,7 +87,6 @@ async function simpanProfil() {
   await muatProfilToko();
 }
 
-// Simpan pengaturan cetak (semua user)
 async function simpanPengaturanCetak() {
   const s = await getSettings();
   await updateSettings({
@@ -124,17 +102,19 @@ async function simpanPengaturanCetak() {
   alert('Pengaturan cetak disimpan!');
 }
 
-// Atur hak akses berdasarkan role
 function aturHakAkses() {
   const isAdmin = currentUser && currentUser.role === 'admin';
-  document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('manajemenUserSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('manajemenDataSection').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('thAksi').style.display = isAdmin ? '' : 'none';
+  if (document.getElementById('manajemenProfilSection'))
+    document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
+  if (document.getElementById('manajemenUserSection'))
+    document.getElementById('manajemenUserSection').style.display = isAdmin ? 'block' : 'none';
+  if (document.getElementById('manajemenDataSection'))
+    document.getElementById('manajemenDataSection').style.display = isAdmin ? 'block' : 'none';
+  const thAksi = document.getElementById('thAksi');
+  if (thAksi) thAksi.style.display = isAdmin ? '' : 'none';
   if (activeTab === 'inventory') refreshProductList();
 }
 
-// Pilih folder kerja
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
@@ -145,8 +125,3 @@ async function pilihFolder() {
     if (e.name !== 'AbortError') alert('Gagal memilih folder');
   }
 }
-
-// Backup & Restore (placeholder)
-async function backupData() { alert('Fitur backup masih dalam pengembangan.'); }
-async function restoreData() { alert('Fitur restore masih dalam pengembangan.'); }
-function resetDatabase() { if (confirm('Reset semua data?')) { alert('Silakan gunakan dashboard Supabase untuk reset.'); } }
