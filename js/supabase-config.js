@@ -3,22 +3,18 @@ const SUPABASE_URL = 'https://ikahekmyqvdugiljcrlp.supabase.co';   // GANTI
 const SUPABASE_ANON_KEY = 'sb_publishable_GjCb5njeiL6W8_HKA-OrLQ_e8dk7IIL'; // GANTI
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Global variables
+// Global variables (hanya yang diperlukan di semua file)
 let currentUser = null;
 let workingDirHandle = null;
 let logoTokoDihapus = false;
-let chartInstance = null;
-let topProductsChart = null;
 
-// ===================== FUNGSI BANTU DATABASE =====================
+// Supabase helper functions
 async function getSettings() {
   const { data } = await supabaseClient.from('settings').select('*').eq('id', 1).single();
   return data || {};
 }
 
-async function updateSettings(s) {
-  await supabaseClient.from('settings').upsert({ id: 1, ...s });
-}
+async function updateSettings(s) { await supabaseClient.from('settings').upsert({ id: 1, ...s }); }
 
 async function getAllProducts() {
   const { data } = await supabaseClient.from('products').select('*').order('nama');
@@ -43,7 +39,7 @@ async function deleteProduct(barcode) {
 async function getAllTransactions(start, end) {
   let q = supabaseClient.from('transactions').select('*').order('tanggal', { ascending: false });
   if (start) q = q.gte('tanggal', start);
-  if (end) { const e = new Date(end); e.setDate(e.getDate() + 1); q = q.lt('tanggal', e.toISOString()); }
+  if (end) { const e = new Date(end); e.setDate(e.getDate()+1); q = q.lt('tanggal', e.toISOString()); }
   const { data } = await q;
   return data || [];
 }
@@ -64,7 +60,7 @@ async function deleteTransaction(noInv) {
 }
 
 async function uploadInvoicePDF(no, blob) {
-  await supabaseClient.storage.from('invoices').upload(`${no}.pdf`, blob, { contentType: 'application/pdf', upsert: true });
+  await supabaseClient.storage.from('invoices').upload(`${no}.pdf`, blob, { contentType:'application/pdf', upsert:true });
 }
 
 async function getInvoiceURL(no) {

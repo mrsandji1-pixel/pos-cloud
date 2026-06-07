@@ -9,7 +9,6 @@ function setupTransaksi() {
     btn.onclick = () => { document.getElementById('bayar').value = (parseInt(document.getElementById('bayar').value)||0) + n; hitungKembalian(); };
     nominalDiv.appendChild(btn);
   });
-
   document.getElementById('scanInputTrans').onkeydown = e => {
     if (e.key==='Enter') { e.preventDefault(); const b = e.target.value.trim(); if (b) { e.target.value=''; tambahProdukKeCart(b); } }
   };
@@ -67,6 +66,7 @@ async function bayarDanCetak() {
   const no = `INV-${now.toISOString().slice(0,10).replace(/-/g,'')}-${now.toTimeString().slice(0,8).replace(/:/g,'')}`;
   const trx = { no_invoice: no, tanggal: now.toISOString(), customer: cust, items: cart.map(i=>({ barcode:i.barcode, nama:i.nama, harga:i.harga, qty:i.qty, subtotal:i.harga*i.qty })), total, bayar, kembali };
   try {
+    // Kurangi stok
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -76,9 +76,10 @@ async function bayarDanCetak() {
     await insertTransaction(trx);
 
     const toko = await getSettings();
+
+    // Buat PDF untuk arsip
     const lebarKertas = parseInt(toko.kertas_lebar)||80;
     const marginKiri = 3, marginKanan = 3;
-    const areaCetak = lebarKertas - marginKiri - marginKanan;
     const xItem = marginKiri, xQty = lebarKertas*0.4, xHarga = lebarKertas*0.65, xSubtotal = lebarKertas-marginKanan;
     let tinggiHeader = 28; if (toko.logo) tinggiHeader = 40;
     const tinggiItem = cart.length*5;
@@ -115,7 +116,7 @@ async function bayarDanCetak() {
     doc.text('Kembali:', xItem, y); doc.text('Rp'+kembali.toLocaleString('id'), xSubtotal, y, { align:'right' }); y+=5;
     if (toko.footer) {
       doc.setFontSize(7);
-      doc.text(toko.footer, lebarKertas/2, y, { align:'center', maxWidth:areaCetak });
+      doc.text(toko.footer, lebarKertas/2, y, { align:'center', maxWidth:lebarKertas-marginKiri-marginKanan });
       y+=8;
     }
     const pdfBlob = doc.output('blob');
@@ -124,7 +125,7 @@ async function bayarDanCetak() {
       try { const fh = await workingDirHandle.getFileHandle(no+'.pdf',{create:true}); const w = await fh.createWritable(); await w.write(pdfBlob); await w.close(); } catch(e) {}
     }
 
-    // CETAK: Bluetooth atau fallback
+    // Cetak teks ke Bluetooth atau tampilkan PDF
     if (bluetoothDevice && bluetoothCharacteristic) {
       const teksStruk = buatStrukTeks(cart, total, bayar, kembali, toko, no, cust);
       await cetakTeksKePrinter(teksStruk);
