@@ -67,31 +67,30 @@ async function hapusTransaksi(noInv) {
       }
     }
     await deleteTransaction(noInv);
-    await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]);
+    // Hapus file PDF dari storage (abaikan jika tidak ada)
+    try { await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]); } catch(e) {}
     alert('Transaksi dihapus');
     muatLaporan();
   } catch (e) { alert('Gagal menghapus: ' + e.message); }
 }
 
-// ========== FUNGSI BARU: Buat PDF dari data transaksi ==========
+// ========== GENERATE PDF DARI DATA TRANSAKSI ==========
 function generateInvoicePDF(trx) {
   const { jsPDF } = window.jspdf;
-  const lebarKertas = 80; // default 80mm
+  const lebarKertas = 80;
   const marginKiri = 3, marginKanan = 3;
   const areaCetak = lebarKertas - marginKiri - marginKanan;
   const xItem = marginKiri, xQty = lebarKertas * 0.4, xHarga = lebarKertas * 0.65, xSubtotal = lebarKertas - marginKanan;
-
-  let tinggiHeader = 28; // akan ditambah jika ada logo nanti
+  let tinggiHeader = 28;
   const tinggiItem = (trx.items || []).length * 5;
   const tinggiTotalBayar = 15;
-  const tinggiFooter = trx.footer ? 12 : 0;
+  const tinggiFooter = trx.toko_footer ? 12 : 0;
   const marginBawah = 10;
   const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + marginBawah;
 
   const doc = new jsPDF({ unit: 'mm', format: [lebarKertas, tinggiTotal] });
   let y = 8;
 
-  // Header
   doc.setFontSize(9);
   doc.text(trx.toko_nama || 'TOKO', marginKiri, y);
   doc.setFontSize(7);
@@ -101,14 +100,12 @@ function generateInvoicePDF(trx) {
   doc.text('Tanggal: ' + new Date(trx.tanggal).toLocaleString('id-ID'), marginKiri, y); y += 5;
   doc.text('Customer: ' + (trx.customer || '-'), marginKiri, y); y += 8;
 
-  // Header tabel
   doc.text('Item', xItem, y);
   doc.text('Qty', xQty, y, { align: 'center' });
   doc.text('Harga', xHarga, y, { align: 'right' });
   doc.text('Subtotal', xSubtotal, y, { align: 'right' });
   y += 4; doc.line(marginKiri, y, xSubtotal, y); y += 3;
 
-  // Item
   (trx.items || []).forEach(item => {
     doc.text(item.nama, xItem, y, { maxWidth: xQty - xItem - 2 });
     doc.text(item.qty.toString(), xQty, y, { align: 'center' });
@@ -136,34 +133,28 @@ function generateInvoicePDF(trx) {
   return doc.output('blob');
 }
 
-// ========== View Invoice (dengan fallback generate ulang) ==========
+// ========== VIEW INVOICE (FALLBACK GENERATE) ==========
 async function viewInvoice(noInv) {
-  // Coba ambil dari storage dulu
+  // Coba ambil dari storage
   const url = await getInvoiceURL(noInv);
   if (url) {
     window.open(url, '_blank');
     return;
   }
 
-  // Jika tidak ada, generate ulang dari data transaksi
+  // Kalau tidak ada, generate dari transaksi
   const trx = await getTransaction(noInv);
-  if (!trx) {
-    alert('Transaksi tidak ditemukan');
-    return;
-  }
-
-  // Ambil data toko untuk footer/nama
+  if (!trx) return alert('Transaksi tidak ditemukan');
   const toko = await getSettings();
   trx.toko_nama = toko.nama;
   trx.toko_alamat = toko.alamat;
   trx.toko_footer = toko.footer;
-
-  const pdfBlob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(pdfBlob);
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
   window.open(blobUrl, '_blank');
 }
 
-// ========== Cetak Ulang (dengan fallback) ==========
+// ========== CETAK ULANG (FALLBACK GENERATE) ==========
 async function cetakUlang(noInv) {
   const url = await getInvoiceURL(noInv);
   if (url) {
@@ -172,24 +163,19 @@ async function cetakUlang(noInv) {
     return;
   }
 
-  // Fallback generate ulang
   const trx = await getTransaction(noInv);
-  if (!trx) {
-    alert('Transaksi tidak ditemukan');
-    return;
-  }
+  if (!trx) return alert('Transaksi tidak ditemukan');
   const toko = await getSettings();
   trx.toko_nama = toko.nama;
   trx.toko_alamat = toko.alamat;
   trx.toko_footer = toko.footer;
-
-  const pdfBlob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(pdfBlob);
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
   const pw = window.open(blobUrl, '_blank');
   if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
 }
 
-// ========== Chart (tidak berubah) ==========
+// ========== CHART ==========
 function renderChart(trans, mode, start, end) {
   if (chartInstance) chartInstance.destroy();
   const ctx = document.getElementById('chartPenjualan')?.getContext('2d');
