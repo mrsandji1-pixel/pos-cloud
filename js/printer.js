@@ -60,13 +60,23 @@ async function cetakTeksKePrinter(teks) {
     return;
   }
   try {
+    // Inisialisasi printer
+    const init = new Uint8Array([0x1B, 0x40]); // ESC @
+    await bluetoothCharacteristic.writeValue(init);
+
+    // Tambahkan perintah newline yang tepat: \r\n
+    const teksDenganCRLF = teks.replace(/\n/g, '\r\n');
     const encoder = new TextEncoder();
-    const data = encoder.encode(teks + '\n\n\n\n');
+    const data = encoder.encode(teksDenganCRLF + '\r\n\r\n\r\n');
+    
     const chunkSize = 512;
     for (let i = 0; i < data.byteLength; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize);
       await bluetoothCharacteristic.writeValue(chunk);
     }
+    // Potong kertas (jika didukung)
+    const cut = new Uint8Array([0x1D, 0x56, 0x00]);
+    await bluetoothCharacteristic.writeValue(cut);
   } catch (e) {
     console.error(e);
     alert('Gagal cetak: ' + e.message);
@@ -80,7 +90,6 @@ async function getLebarKertasAktif() {
 
 async function testPrint() {
   const lebar = await getLebarKertasAktif();
-  // 58mm = 32 karakter, 80mm = 47 karakter
   const charWidth = lebar === 80 ? 47 : 32;
   const garis = '='.repeat(charWidth);
 
@@ -121,14 +130,11 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   const garis = '-'.repeat(charWidth);
   const garisDouble = '='.repeat(charWidth);
 
-  // Lebar masing-masing kolom disesuaikan
+  // Lebar kolom
   const lebarItem = is80mm ? 21 : 10;
   const lebarQty = is80mm ? 5 : 4;
   const lebarHarga = is80mm ? 11 : 9;
   const lebarSubtotal = is80mm ? 10 : 9;
-  // Total harus pas charWidth
-  // 80mm: 21+5+11+10 = 47
-  // 58mm: 10+4+9+9 = 32
 
   let struk = '';
   // Nama toko (center)
@@ -170,11 +176,11 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
 
   // Total, bayar, kembali
   const lebarNilai = is80mm ? 12 : 9;
+  const labelWidth = is80mm ? 10 : 9;
   const totalStr = ('Rp' + total.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
   const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
   const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-lebarNilai).padStart(lebarNilai);
 
-  const labelWidth = is80mm ? 10 : 9;
   struk += 'Total'.padEnd(labelWidth) + ': ' + totalStr + '\n';
   struk += 'Bayar'.padEnd(labelWidth) + ': ' + bayarStr + '\n';
   struk += 'Kembali'.padEnd(labelWidth) + ': ' + kembaliStr + '\n';
