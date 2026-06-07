@@ -22,7 +22,6 @@ async function muatProfilToko() {
       document.getElementById('logoPreviewContainer').style.display = 'none';
     }
   } else {
-    // Set default values
     document.getElementById('tokoNama').value = '';
     document.getElementById('tokoAlamat').value = '';
     document.getElementById('tokoTelp').value = '';
@@ -39,13 +38,11 @@ async function muatProfilToko() {
   }
 }
 
-// Toggle label settings
 function toggleLabelSettings() {
   const jenis = document.getElementById('jenisKertas').value;
   document.getElementById('labelSettings').style.display = jenis === 'label' ? 'block' : 'none';
 }
 
-// Preview logo toko
 function previewLogoToko() {
   const f = document.getElementById('tokoLogo').files[0];
   if (f) {
@@ -59,7 +56,6 @@ function previewLogoToko() {
   }
 }
 
-// Hapus logo toko
 function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
@@ -67,7 +63,6 @@ function hapusLogoToko() {
   logoTokoDihapus = true;
 }
 
-// Simpan profil toko (admin only)
 async function simpanProfil() {
   if (!currentUser || currentUser.role !== 'admin') return;
   const nama = document.getElementById('tokoNama').value;
@@ -107,7 +102,6 @@ async function simpanProfil() {
   await muatProfilToko();
 }
 
-// Simpan pengaturan cetak (semua user)
 async function simpanPengaturanCetak() {
   const s = await getSettings();
   await updateSettings({
@@ -123,7 +117,6 @@ async function simpanPengaturanCetak() {
   alert('Pengaturan cetak disimpan!');
 }
 
-// Atur hak akses berdasarkan role
 function aturHakAkses() {
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('manajemenProfilSection').style.display = isAdmin ? 'block' : 'none';
@@ -133,7 +126,6 @@ function aturHakAkses() {
   if (activeTab === 'inventory') refreshProductList();
 }
 
-// Pilih folder kerja
 async function pilihFolder() {
   try {
     const d = await window.showDirectoryPicker();
@@ -150,7 +142,6 @@ async function backupData() {
   try {
     const zip = new JSZip();
     
-    // Ambil semua data dari Supabase
     const { data: users } = await supabaseClient.from('users').select('*');
     const { data: products } = await supabaseClient.from('products').select('*');
     const { data: transactions } = await supabaseClient.from('transactions').select('*');
@@ -184,18 +175,15 @@ async function restoreData() {
       const zip = await JSZip.loadAsync(file);
       let restored = { users: 0, products: 0, transactions: 0, settings: 0 };
 
-      // Restore users
       if (zip.files['users.json']) {
         const text = await zip.files['users.json'].async('text');
         const users = JSON.parse(text);
         if (users.length > 0) {
-          // Hapus dulu user lama kecuali admin? Hati-hati, kita bisa upsert
           const { error } = await supabaseClient.from('users').upsert(users, { onConflict: 'username' });
           if (!error) restored.users = users.length;
         }
       }
 
-      // Restore products
       if (zip.files['products.json']) {
         const text = await zip.files['products.json'].async('text');
         const products = JSON.parse(text);
@@ -205,7 +193,6 @@ async function restoreData() {
         }
       }
 
-      // Restore transactions
       if (zip.files['transactions.json']) {
         const text = await zip.files['transactions.json'].async('text');
         const transactions = JSON.parse(text);
@@ -215,7 +202,6 @@ async function restoreData() {
         }
       }
 
-      // Restore settings
       if (zip.files['settings.json']) {
         const text = await zip.files['settings.json'].async('text');
         const settings = JSON.parse(text);
