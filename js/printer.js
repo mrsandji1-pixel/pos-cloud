@@ -80,7 +80,6 @@ async function getLebarKertasAktif() {
 
 async function testPrint() {
   const lebar = await getLebarKertasAktif();
-  // 58mm = 22 karakter, 80mm = 47 karakter
   const charWidth = lebar === 80 ? 47 : 22;
   const garis = '='.repeat(charWidth);
 
@@ -137,35 +136,64 @@ function buatStrukTeks(cart, total, bayar, kembali, toko, noInv, cust) {
   struk += 'Customer: ' + (cust || '-') + '\n';
   struk += garis + '\n';
 
-  // Header tabel
-  const header = 'Item'.padEnd(23).substring(0,23) +   // lebih lebar untuk 80mm
-                 'Qty'.padStart(6) +
-                 'Harga'.padStart(12) +
-                 'Subtotal'.padStart(10);
-  struk += header.substring(0, charWidth) + '\n';
-  struk += garis + '\n';
+  if (lebar === 80) {
+    // 80mm: kolom Item 18 karakter (dari sebelumnya 23), Subtotal dapat lebih longgar
+    const header = 'Item'.padEnd(18).substring(0,18) +
+                   'Qty'.padStart(6) +
+                   'Harga'.padStart(13) +
+                   'Subtotal'.padStart(10);
+    struk += header.substring(0, charWidth) + '\n';
+    struk += garis + '\n';
 
-  // Item
-  cart.forEach(item => {
-    const nama = (item.nama || '').length > 23 ? item.nama.substring(0,23) : item.nama.padEnd(23);
-    const qty = item.qty.toString().padStart(6);
-    const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-12).padStart(12);
-    const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
-    let row = nama + qty + harga + sub;
-    if (row.length > charWidth) row = row.substring(0, charWidth);
-    struk += row + '\n';
-  });
+    cart.forEach(item => {
+      const nama = (item.nama || '').length > 18 ? item.nama.substring(0,18) : item.nama.padEnd(18);
+      const qty = item.qty.toString().padStart(6);
+      const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-13).padStart(13);
+      const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
+      let row = nama + qty + harga + sub;
+      if (row.length > charWidth) row = row.substring(0, charWidth);
+      struk += row + '\n';
+    });
 
-  struk += garis + '\n';
+    struk += garis + '\n';
 
-  // Total, bayar, kembali
-  const totalStr = ('Rp' + total.toLocaleString('id')).slice(-12).padStart(12);
-  const bayarStr = ('Rp' + bayar.toLocaleString('id')).slice(-12).padStart(12);
-  const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-12).padStart(12);
+    const totalStr   = ('Rp' + total.toLocaleString('id')).slice(-13).padStart(13);
+    const bayarStr   = ('Rp' + bayar.toLocaleString('id')).slice(-13).padStart(13);
+    const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-13).padStart(13);
 
-  struk += 'Total     : ' + totalStr + '\n';
-  struk += 'Bayar     : ' + bayarStr + '\n';
-  struk += 'Kembali   : ' + kembaliStr + '\n';
+    struk += 'Total     : ' + totalStr + '\n';
+    struk += 'Bayar     : ' + bayarStr + '\n';
+    struk += 'Kembali   : ' + kembaliStr + '\n';
+
+  } else {
+    // 58mm: seperti semula
+    const header = 'Item'.padEnd(12).substring(0,12) +
+                   'Qty'.padStart(3) +
+                   'Harga'.padStart(10) +
+                   'Sub'.padStart(10);
+    struk += header.substring(0, charWidth) + '\n';
+    struk += garis + '\n';
+
+    cart.forEach(item => {
+      const nama = (item.nama || '').length > 12 ? item.nama.substring(0,12) : item.nama.padEnd(12);
+      const qty = item.qty.toString().padStart(3);
+      const harga = ('Rp' + item.harga.toLocaleString('id')).slice(-10).padStart(10);
+      const sub = ('Rp' + (item.harga * item.qty).toLocaleString('id')).slice(-10).padStart(10);
+      let row = nama + qty + harga + sub;
+      if (row.length > charWidth) row = row.substring(0, charWidth);
+      struk += row + '\n';
+    });
+
+    struk += garis + '\n';
+
+    const totalStr   = ('Rp' + total.toLocaleString('id')).slice(-10).padStart(10);
+    const bayarStr   = ('Rp' + bayar.toLocaleString('id')).slice(-10).padStart(10);
+    const kembaliStr = ('Rp' + kembali.toLocaleString('id')).slice(-10).padStart(10);
+
+    struk += 'Total   : ' + totalStr + '\n';
+    struk += 'Bayar   : ' + bayarStr + '\n';
+    struk += 'Kembali : ' + kembaliStr + '\n';
+  }
 
   if (toko.footer) {
     const footer = toko.footer.length > charWidth ? toko.footer.substring(0, charWidth) : toko.footer;
