@@ -61,10 +61,13 @@
   <!-- INVENTORY -->
   <div id="page-inventory" class="page">
     <div class="form-group">
-      <label>Barcode</label>
-      <input type="text" id="prodBarcode" placeholder="Scan barcode atau ketik manual..." autocomplete="off">
-      <button class="btn" onclick="cariAtauTambahProduk()" style="margin-top:4px;">Cari / Tambah Produk</button>
-    </div>
+  <label>Barcode</label>
+  <div style="display:flex; gap:4px;">
+    <input type="text" id="prodBarcode" placeholder="Scan barcode atau ketik manual..." autocomplete="off" style="flex:1;">
+    <button class="btn btn-sm" onclick="generateBarcode()" title="Generate barcode otomatis">🔢 Generate</button>
+  </div>
+  <button class="btn" onclick="cariAtauTambahProduk()" style="margin-top:4px;">Cari / Tambah Produk</button>
+</div>
     <div id="productForm" style="display:none;">
       <h3 id="formTitle"></h3>
       <div id="fotoPreviewContainer" style="text-align:center; margin-bottom:12px; display:none;">
