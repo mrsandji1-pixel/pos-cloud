@@ -3,12 +3,13 @@ const SUPABASE_URL = 'https://cnpofyfgcmbvmvkvqwzn.supabase.co';   // GANTI
 const SUPABASE_ANON_KEY = 'sb_publishable_gG5sImRjUWFEACKhu7F3vg_0z25eK0t'; // GANTI
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Global variables (hanya yang diperlukan di semua file)
+// Global variables
 let currentUser = null;
 let workingDirHandle = null;
 let logoTokoDihapus = false;
+let activeTab = 'transaksi';
 
-// Supabase helper functions
+// ===================== SUPABASE FUNCTIONS =====================
 async function getSettings() {
   const { data } = await supabaseClient.from('settings').select('*').eq('id', 1).single();
   return data || {};
@@ -75,4 +76,29 @@ function toBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// ===================== FUNGSI BARU UNTUK UPLOAD FOTO PRODUK =====================
+async function uploadProductPhoto(file) {
+  const fileName = `${Date.now()}_${file.name}`;
+  const { data, error } = await supabaseClient.storage
+    .from('product-photos')
+    .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+  if (error) throw error;
+
+  // Dapatkan URL publik
+  const { data: urlData } = supabaseClient.storage
+    .from('product-photos')
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+}
+
+async function removeProductPhoto(url) {
+  // Ekstrak nama file dari URL
+  const fileName = url.split('/').pop();
+  if (fileName) {
+    await supabaseClient.storage.from('product-photos').remove([fileName]);
+  }
 }
