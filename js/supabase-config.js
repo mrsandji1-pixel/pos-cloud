@@ -7,7 +7,6 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let currentUser = null;
 let workingDirHandle = null;
 let logoTokoDihapus = false;
-let activeTab = 'transaksi';
 
 // ===================== SUPABASE FUNCTIONS =====================
 async function getSettings() {
