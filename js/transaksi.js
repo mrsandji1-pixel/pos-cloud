@@ -188,3 +188,40 @@ async function bayarDanCetak() {
     alert(`✅ Berhasil!\nNo: ${no}\nTotal: Rp${total.toLocaleString('id')}\nKembali: Rp${kembali.toLocaleString('id')}`);
   } catch (e) { alert('❌ Gagal: '+e.message); }
 }
+
+// Fungsi untuk menampilkan detail produk di modal
+function lihatDetailProduk(barcode) {
+  (async () => {
+    try {
+      // Gunakan fungsi getProductByBarcode dari supabase-config.js
+      const p = await getProductByBarcode(barcode);
+      if (!p) {
+        alert('Produk tidak ditemukan.');
+        return;
+      }
+
+      // Isi data ke modal
+      document.getElementById('detailNama').textContent = p.nama || '';
+      document.getElementById('detailBarcode').textContent = p.barcode || '';
+      document.getElementById('detailKategori').textContent = p.kategori || '-';
+      document.getElementById('detailKeterangan').textContent = p.keterangan || '-';
+      document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
+      document.getElementById('detailStok').textContent = p.stok || 0;
+
+      // Tampilkan foto jika ada
+      const img = document.getElementById('detailFoto');
+      if (p.foto) {
+        img.src = p.foto;
+        img.style.display = 'block';
+      } else {
+        img.style.display = 'none';
+      }
+
+      // Tampilkan modal
+      document.getElementById('productDetailModal').style.display = 'flex';
+    } catch (err) {
+      console.error('Gagal memuat detail produk:', err);
+      alert('Gagal memuat detail produk.');
+    }
+  })();
+}
