@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Optimasi Kecepatan) =====================
+// ===================== TRANSAKSI.JS =====================
 let cart = [];
 let searchTimer = null;
 
@@ -11,27 +11,64 @@ function setupTransaksi() {
     nominalDiv.appendChild(btn);
   });
 
+  // Scan barcode (field khusus)
   document.getElementById('scanInputTrans').onkeydown = e => {
-    if (e.key==='Enter') { e.preventDefault(); const b = e.target.value.trim(); if (b) { e.target.value=''; tambahProdukKeCart(b); } }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const b = e.target.value.trim();
+      if (b) {
+        e.target.value = '';
+        // Panggil fungsi tambah produk langsung, tanpa pencarian
+        tambahProdukDariScan(b);
+      }
+    }
   };
 }
 
-async function tambahProdukKeCart(barcode) {
-  let p = await getProductByBarcode(barcode);
-  if (!p) { const clean = barcode.replace(/[^a-zA-Z0-9\-_]/g,''); if (clean!==barcode) p = await getProductByBarcode(clean); }
-  if (!p) {
-    const { data } = await supabaseClient.from('products').select('*').ilike('nama', `%${barcode}%`).limit(1);
-    p = data?.[0] || null;
+// Fungsi khusus untuk scanner: langsung tambah ke cart
+async function tambahProdukDariScan(barcode) {
+  // Bersihkan karakter non‑alfanumerik
+  let clean = barcode.replace(/[^a-zA-Z0-9\-_]/g, '');
+  if (!clean) return;
+
+  let product = await getProductByBarcode(clean);
+  if (!product) {
+    // Jika tidak ketemu, coba pencarian parsial
+    const { data } = await supabaseClient.from('products').select('*').or(`barcode.ilike.%${clean}%,nama.ilike.%${clean}%`).limit(1);
+    product = data?.[0] || null;
   }
-  if (!p) { alert('Produk tidak ditemukan'); return; }
-  if (p.stok <= 0) { alert('Stok habis'); return; }
-  const ex = cart.find(i => i.barcode === p.barcode);
-  if (ex) { if (ex.qty < p.stok) ex.qty++; else { alert('Stok tidak cukup'); return; } }
-  else cart.push({ barcode: p.barcode, nama: p.nama, harga: p.harga_jual||0, qty: 1, stok: p.stok||0 });
+
+  if (!product) {
+    alert(`Produk dengan barcode "${clean}" tidak ditemukan.`);
+    return;
+  }
+  if (product.stok <= 0) {
+    alert(`Stok "${product.nama}" habis.`);
+    return;
+  }
+
+  // Tambah ke cart
+  const existing = cart.find(i => i.barcode === product.barcode);
+  if (existing) {
+    if (existing.qty < product.stok) {
+      existing.qty++;
+    } else {
+      alert('Stok tidak mencukupi');
+      return;
+    }
+  } else {
+    cart.push({
+      barcode: product.barcode,
+      nama: product.nama,
+      harga: product.harga_jual || 0,
+      qty: 1,
+      stok: product.stok || 0
+    });
+  }
   renderCart();
 }
 
-// Pencarian dengan debounce dan query server-side (jauh lebih cepat)
+// Pencarian manual (tetap dengan debounce)
 function searchProductFn(query) {
   clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
@@ -78,6 +115,12 @@ function searchProductFn(query) {
       };
     });
   }, 300);
+}
+
+// Fungsi untuk menambahkan produk dari hasil pencarian (klik)
+function tambahProdukKeCart(barcode) {
+  // Gunakan fungsi scan yang sama agar logika konsisten
+  tambahProdukDariScan(barcode);
 }
 
 document.addEventListener('click', e => {
@@ -189,39 +232,21 @@ async function bayarDanCetak() {
   } catch (e) { alert('❌ Gagal: '+e.message); }
 }
 
-// Fungsi untuk menampilkan detail produk di modal
+// Fungsi lihat detail produk (tombol i)
 function lihatDetailProduk(barcode) {
   (async () => {
     try {
-      // Gunakan fungsi getProductByBarcode dari supabase-config.js
       const p = await getProductByBarcode(barcode);
-      if (!p) {
-        alert('Produk tidak ditemukan.');
-        return;
-      }
-
-      // Isi data ke modal
+      if (!p) { alert('Produk tidak ditemukan.'); return; }
       document.getElementById('detailNama').textContent = p.nama || '';
       document.getElementById('detailBarcode').textContent = p.barcode || '';
       document.getElementById('detailKategori').textContent = p.kategori || '-';
       document.getElementById('detailKeterangan').textContent = p.keterangan || '-';
       document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
       document.getElementById('detailStok').textContent = p.stok || 0;
-
-      // Tampilkan foto jika ada
       const img = document.getElementById('detailFoto');
-      if (p.foto) {
-        img.src = p.foto;
-        img.style.display = 'block';
-      } else {
-        img.style.display = 'none';
-      }
-
-      // Tampilkan modal
+      if (p.foto) { img.src = p.foto; img.style.display = 'block'; } else { img.style.display = 'none'; }
       document.getElementById('productDetailModal').style.display = 'flex';
-    } catch (err) {
-      console.error('Gagal memuat detail produk:', err);
-      alert('Gagal memuat detail produk.');
-    }
+    } catch (err) { console.error(err); alert('Gagal memuat detail produk.'); }
   })();
 }
