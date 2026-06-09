@@ -1,22 +1,65 @@
-// ===================== PRINTER.JS (Dengan Logo) =====================
+// ===================== PRINTER.JS (Fixed GATT + Chunking) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
+let keepAliveInterval = null;
+
+// Fungsi untuk menjaga koneksi tetap hidup (kirim ping setiap 10 detik)
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAliveInterval = setInterval(async () => {
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      try {
+        const encoder = new TextEncoder();
+        // Kirim karakter null sebagai ping (tidak tercetak)
+        await bluetoothCharacteristic.writeValue(encoder.encode('\x00'));
+      } catch (e) {
+        console.warn('KeepAlive gagal:', e.message);
+      }
+    }
+  }, 10000);
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
 
 async function sambungPrinter() {
   try {
+    // Jika sudah ada device, putuskan dulu
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      await bluetoothDevice.gatt.disconnect();
+    }
+
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
     });
+
     const server = await bluetoothDevice.gatt.connect();
     const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
     bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+
+    // Mulai keep-alive
+    startKeepAlive();
+
+    // Dengarkan event disconnect
+    bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+      updateStatusPrinter(false);
+      stopKeepAlive();
+      bluetoothCharacteristic = null;
+      alert('Printer terputus. Silakan sambungkan ulang.');
+    });
+
     updateStatusPrinter(true);
     alert('Printer terhubung!');
     await simpanPengaturanCetak();
   } catch (e) {
     console.error(e);
     updateStatusPrinter(false);
+    stopKeepAlive();
     alert('Gagal terhubung: ' + e.message);
   }
 }
@@ -26,6 +69,7 @@ async function putusPrinter() {
     await bluetoothDevice.gatt.disconnect();
     bluetoothDevice = null;
     bluetoothCharacteristic = null;
+    stopKeepAlive();
     updateStatusPrinter(false);
     alert('Koneksi printer diputus');
   }
@@ -46,14 +90,13 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom (array byte)
+// Konversi base64 ke bitmap monokrom
 async function base64ToBitmap(base64, maxWidth) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      // Skala gambar ke lebar maksimal (dalam pixel printer, biasanya 384 untuk 80mm)
       const scale = maxWidth / img.width;
       canvas.width = maxWidth;
       canvas.height = Math.round(img.height * scale);
@@ -61,7 +104,6 @@ async function base64ToBitmap(base64, maxWidth) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const pixels = imageData.data;
       const bytes = [];
-      // Setiap byte mewakili 8 pixel horizontal (0 = putih, 1 = hitam)
       for (let y = 0; y < canvas.height; y++) {
         for (let x = 0; x < canvas.width; x += 8) {
           let byte = 0;
@@ -69,9 +111,7 @@ async function base64ToBitmap(base64, maxWidth) {
             const px = x + bit;
             if (px < canvas.width) {
               const idx = (y * canvas.width + px) * 4;
-              const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
-              // Konversi ke grayscale, jika > 128 dianggap putih (0)
-              const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+              const gray = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
               if (gray < 128) byte |= (1 << (7 - bit));
             }
           }
@@ -85,40 +125,66 @@ async function base64ToBitmap(base64, maxWidth) {
   });
 }
 
-// Kirim perintah cetak bitmap (ESC/POS GS v 0)
-function sendBitmapCommand(width, height, data) {
+// Kirim perintah bitmap (GS v 0) dalam chunk
+async function sendBitmapCommand(width, height, data) {
   const w = Math.ceil(width / 8);
   const xL = w & 0xFF;
   const xH = (w >> 8) & 0xFF;
   const yL = height & 0xFF;
   const yH = (height >> 8) & 0xFF;
-  return new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH, ...data]);
+  const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+  const fullCmd = new Uint8Array([...header, ...data]);
+
+  // Kirim per chunk 256 byte
+  for (let i = 0; i < fullCmd.length; i += 256) {
+    const chunk = fullCmd.slice(i, i + 256);
+    await bluetoothCharacteristic.writeValue(chunk);
+    await new Promise(r => setTimeout(r, 50));
+  }
 }
 
 // Fungsi utama mengirim struk (logo + teks) ke printer
 async function cetakStrukKePrinter(logoBase64, teks) {
-  if (!bluetoothCharacteristic) {
+  if (!bluetoothDevice || !bluetoothDevice.gatt.connected) {
     alert('Printer tidak terhubung');
     return;
   }
+
+  // Pastikan karakteristik tersedia
+  if (!bluetoothCharacteristic) {
+    try {
+      const server = await bluetoothDevice.gatt.connect();
+      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+      startKeepAlive();
+    } catch (e) {
+      alert('Gagal menyambung ulang: ' + e.message);
+      return;
+    }
+  }
+
   try {
     const lebar = await getLebarKertasAktif();
-    const maxWidth = lebar === 80 ? 384 : 256; // 384 dot = 48 byte, 256 dot = 32 byte (standar ESC/POS)
+    const maxWidth = lebar === 80 ? 384 : 256;
 
     // Kirim logo jika ada
     if (logoBase64) {
-      const bitmap = await base64ToBitmap(logoBase64, maxWidth);
-      const cmd = sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
-      await bluetoothCharacteristic.writeValue(cmd);
-      // Jeda setelah logo
-      await new Promise(r => setTimeout(r, 500));
-      // Feed beberapa baris
-      const feed = new TextEncoder().encode('\n\n');
-      await bluetoothCharacteristic.writeValue(feed);
-      await new Promise(r => setTimeout(r, 100));
+      try {
+        const bitmap = await base64ToBitmap(logoBase64, maxWidth);
+        await sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
+        // Feed setelah logo
+        const feed = new TextEncoder().encode('\n\n');
+        for (let i = 0; i < feed.length; i += 256) {
+          const chunk = feed.slice(i, i + 256);
+          await bluetoothCharacteristic.writeValue(chunk);
+          await new Promise(r => setTimeout(r, 50));
+        }
+      } catch (e) {
+        console.warn('Gagal mencetak logo:', e.message);
+      }
     }
 
-    // Kirim teks
+    // Kirim teks per baris
     const encoder = new TextEncoder();
     const lines = teks.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -128,15 +194,19 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       for (let j = 0; j < data.byteLength; j += 256) {
         const chunk = data.slice(j, j + 256);
         await bluetoothCharacteristic.writeValue(chunk);
-        await new Promise(r => setTimeout(r, 20));
+        await new Promise(r => setTimeout(r, 50));
       }
-      await new Promise(r => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 80));
     }
 
     // Potong kertas
     const cut = encoder.encode('\x1B\x69');
-    await bluetoothCharacteristic.writeValue(cut);
-    await new Promise(r => setTimeout(r, 100));
+    for (let i = 0; i < cut.length; i += 256) {
+      const chunk = cut.slice(i, i + 256);
+      await bluetoothCharacteristic.writeValue(chunk);
+      await new Promise(r => setTimeout(r, 50));
+    }
+    await new Promise(r => setTimeout(r, 150));
     alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
@@ -167,8 +237,7 @@ async function testPrint() {
   teks += 'Setting karakter sudah sesuai.\n';
   teks += garis + '\n';
 
-  if (bluetoothDevice && bluetoothCharacteristic) {
-    // Test print tidak pakai logo
+  if (bluetoothDevice && bluetoothDevice.gatt.connected) {
     await cetakStrukKePrinter(null, teks);
   } else {
     const { jsPDF } = window.jspdf;
