@@ -1,4 +1,4 @@
-// ===================== PRINTER.JS (Optimasi Ekstrem) =====================
+// ===================== PRINTER.JS (Perbaikan Font dan Batas Bawah) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -46,14 +46,13 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom (array byte) - ukuran logo diperkecil ekstrem
+// Konversi base64 ke bitmap monokrom (array byte) - lebar logo 64 piksel
 async function base64ToBitmap(base64, maxWidth) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      // Lebar logo maksimum 64 piksel (sangat kecil)
       const scale = maxWidth / img.width;
       canvas.width = maxWidth;
       canvas.height = Math.round(img.height * scale);
@@ -83,7 +82,6 @@ async function base64ToBitmap(base64, maxWidth) {
   });
 }
 
-// Kirim perintah cetak bitmap (ESC/POS GS v 0)
 function sendBitmapCommand(width, height, data) {
   const w = Math.ceil(width / 8);
   const xL = w & 0xFF;
@@ -94,7 +92,6 @@ function sendBitmapCommand(width, height, data) {
   return new Uint8Array([...header, ...data]);
 }
 
-// Fungsi utama mengirim struk ke printer
 async function cetakStrukKePrinter(logoBase64, teks) {
   if (!bluetoothCharacteristic) {
     alert('Printer tidak terhubung');
@@ -102,23 +99,30 @@ async function cetakStrukKePrinter(logoBase64, teks) {
   }
   try {
     const lebar = await getLebarKertasAktif();
-    // Lebar logo diperkecil menjadi 64 piksel
-    const maxWidth = 64;
+    const maxWidth = 64; // logo kecil
+
+    // Reset printer ke default (ESC @)
+    const reset = new Uint8Array([0x1B, 0x40]);
+    await bluetoothCharacteristic.writeValue(reset);
+    await new Promise(r => setTimeout(r, 50));
 
     // Kirim logo jika ada
     if (logoBase64) {
       const bitmap = await base64ToBitmap(logoBase64, maxWidth);
       const cmd = sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
-      // Kirim seluruh data logo dalam chunk 512 byte tanpa jeda
       for (let i = 0; i < cmd.byteLength; i += 512) {
         const chunk = cmd.slice(i, i + 512);
         await bluetoothCharacteristic.writeValue(chunk);
       }
-      // Jeda singkat setelah logo
-      await new Promise(r => setTimeout(r, 200));
-      // Feed 2 baris kosong
-      const feed = new TextEncoder().encode('\n\n');
+      // Tunggu printer selesai mencetak logo
+      await new Promise(r => setTimeout(r, 300));
+      // Reset kembali mode teks
+      await bluetoothCharacteristic.writeValue(reset);
+      await new Promise(r => setTimeout(r, 100));
+      // 3 baris kosong agar tidak menempel logo
+      const feed = new TextEncoder().encode('\n\n\n');
       await bluetoothCharacteristic.writeValue(feed);
+      await new Promise(r => setTimeout(r, 50));
     }
 
     // Kirim teks per baris dengan jeda 50ms antar baris
@@ -128,19 +132,23 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       let line = lines[i];
       if (i < lines.length - 1) line += '\n';
       const data = encoder.encode(line);
-      // Kirim seluruh baris dalam satu chunk jika memungkinkan, atau potong 256 byte
       for (let j = 0; j < data.byteLength; j += 256) {
         const chunk = data.slice(j, j + 256);
         await bluetoothCharacteristic.writeValue(chunk);
       }
-      // Jeda 50ms antar baris
       await new Promise(r => setTimeout(r, 50));
     }
 
-    // Potong kertas (ESC i)
+    // Tambah 3 baris kosong sebelum potong kertas (untuk batas bawah)
+    const extraFeed = encoder.encode('\n\n\n');
+    await bluetoothCharacteristic.writeValue(extraFeed);
+    await new Promise(r => setTimeout(r, 50));
+
+    // Potong kertas
     const cut = encoder.encode('\x1B\x69');
     await bluetoothCharacteristic.writeValue(cut);
     await new Promise(r => setTimeout(r, 100));
+
     alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
@@ -153,7 +161,6 @@ async function getLebarKertasAktif() {
   return parseInt(settings.kertas_lebar) || 80;
 }
 
-// Test print yang lebih pendek
 async function testPrint() {
   const lebar = await getLebarKertasAktif();
   const charWidth = lebar === 80 ? 47 : 32;
