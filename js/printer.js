@@ -1,4 +1,4 @@
-// ===================== PRINTER.JS (Perbaikan Font dan Batas Bawah) =====================
+// ===================== PRINTER.JS (Font Normal Setelah Logo) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -46,7 +46,7 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom (array byte) - lebar logo 64 piksel
+// Konversi base64 ke bitmap monokrom (lebar logo tetap kecil)
 async function base64ToBitmap(base64, maxWidth) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -99,9 +99,9 @@ async function cetakStrukKePrinter(logoBase64, teks) {
   }
   try {
     const lebar = await getLebarKertasAktif();
-    const maxWidth = 64; // logo kecil
+    const maxWidth = 64; // logo tetap kecil
 
-    // Reset printer ke default (ESC @)
+    // Reset printer ke default sebelum mulai
     const reset = new Uint8Array([0x1B, 0x40]);
     await bluetoothCharacteristic.writeValue(reset);
     await new Promise(r => setTimeout(r, 50));
@@ -116,9 +116,20 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       }
       // Tunggu printer selesai mencetak logo
       await new Promise(r => setTimeout(r, 300));
-      // Reset kembali mode teks
+
+      // ** PENTING: Kembalikan ke mode teks normal **
+      // 1. Inisialisasi ulang printer (ESC @)
       await bluetoothCharacteristic.writeValue(reset);
       await new Promise(r => setTimeout(r, 100));
+      // 2. Pilih font normal (ESC M 0 atau ESC ! 0)
+      const fontNormal = new Uint8Array([0x1B, 0x21, 0x00]); // ESC ! 0 = font A (normal)
+      await bluetoothCharacteristic.writeValue(fontNormal);
+      await new Promise(r => setTimeout(r, 50));
+      // 3. Rata kiri (ESC a 0)
+      const alignLeft = new Uint8Array([0x1B, 0x61, 0x00]);
+      await bluetoothCharacteristic.writeValue(alignLeft);
+      await new Promise(r => setTimeout(r, 50));
+
       // 3 baris kosong agar tidak menempel logo
       const feed = new TextEncoder().encode('\n\n\n');
       await bluetoothCharacteristic.writeValue(feed);
@@ -139,12 +150,12 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       await new Promise(r => setTimeout(r, 50));
     }
 
-    // Tambah 3 baris kosong sebelum potong kertas (untuk batas bawah)
+    // Tambah 3 baris kosong sebelum potong kertas (batas bawah)
     const extraFeed = encoder.encode('\n\n\n');
     await bluetoothCharacteristic.writeValue(extraFeed);
     await new Promise(r => setTimeout(r, 50));
 
-    // Potong kertas
+    // Potong kertas (ESC i)
     const cut = encoder.encode('\x1B\x69');
     await bluetoothCharacteristic.writeValue(cut);
     await new Promise(r => setTimeout(r, 100));
