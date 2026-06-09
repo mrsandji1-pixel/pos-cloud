@@ -1,4 +1,4 @@
-// ===================== PRINTER.JS (Font Normal Setelah Logo) =====================
+// ===================== PRINTER.JS (Final Fix - Header Muncul) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -46,7 +46,7 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom (lebar logo tetap kecil)
+// Konversi base64 ke bitmap monokrom (lebar logo 64px)
 async function base64ToBitmap(base64, maxWidth) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -99,12 +99,12 @@ async function cetakStrukKePrinter(logoBase64, teks) {
   }
   try {
     const lebar = await getLebarKertasAktif();
-    const maxWidth = 64; // logo tetap kecil
+    const maxWidth = 64; // logo kecil
 
-    // Reset printer ke default sebelum mulai
-    const reset = new Uint8Array([0x1B, 0x40]);
-    await bluetoothCharacteristic.writeValue(reset);
-    await new Promise(r => setTimeout(r, 50));
+    // Inisialisasi printer di awal
+    const init = new Uint8Array([0x1B, 0x40]); // ESC @
+    await bluetoothCharacteristic.writeValue(init);
+    await new Promise(r => setTimeout(r, 100));
 
     // Kirim logo jika ada
     if (logoBase64) {
@@ -117,45 +117,42 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       // Tunggu printer selesai mencetak logo
       await new Promise(r => setTimeout(r, 300));
 
-      // ** PENTING: Kembalikan ke mode teks normal **
-      // 1. Inisialisasi ulang printer (ESC @)
-      await bluetoothCharacteristic.writeValue(reset);
-      await new Promise(r => setTimeout(r, 100));
-      // 2. Pilih font normal (ESC M 0 atau ESC ! 0)
-      const fontNormal = new Uint8Array([0x1B, 0x21, 0x00]); // ESC ! 0 = font A (normal)
-      await bluetoothCharacteristic.writeValue(fontNormal);
-      await new Promise(r => setTimeout(r, 50));
-      // 3. Rata kiri (ESC a 0)
-      const alignLeft = new Uint8Array([0x1B, 0x61, 0x00]);
-      await bluetoothCharacteristic.writeValue(alignLeft);
-      await new Promise(r => setTimeout(r, 50));
-
-      // 3 baris kosong agar tidak menempel logo
+      // ** JANGAN RESET PRINTER ** - biarkan printer menyelesaikan mode bitmap
+      // Beri jarak setelah logo dengan feed 3 baris kosong
       const feed = new TextEncoder().encode('\n\n\n');
       await bluetoothCharacteristic.writeValue(feed);
       await new Promise(r => setTimeout(r, 50));
+
+      // ** KEMBALI KE MODE TEKS TANPA RESET **
+      // Cukup kirim perintah rata kiri dan font normal
+      const alignLeft = new Uint8Array([0x1B, 0x61, 0x00]); // ESC a 0
+      await bluetoothCharacteristic.writeValue(alignLeft);
+      await new Promise(r => setTimeout(r, 30));
+      // Font normal (ESC ! 0)
+      const fontNormal = new Uint8Array([0x1B, 0x21, 0x00]);
+      await bluetoothCharacteristic.writeValue(fontNormal);
+      await new Promise(r => setTimeout(r, 30));
     }
 
-    // Kirim teks per baris dengan jeda 50ms antar baris
+    // Kirim teks per baris
     const encoder = new TextEncoder();
     const lines = teks.split('\n');
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
       if (i < lines.length - 1) line += '\n';
       const data = encoder.encode(line);
-      for (let j = 0; j < data.byteLength; j += 256) {
-        const chunk = data.slice(j, j + 256);
-        await bluetoothCharacteristic.writeValue(chunk);
-      }
-      await new Promise(r => setTimeout(r, 50));
+      // Kirim per baris tanpa chunking jika memungkinkan
+      await bluetoothCharacteristic.writeValue(data);
+      // Jeda 30ms antar baris untuk kestabilan
+      await new Promise(r => setTimeout(r, 30));
     }
 
-    // Tambah 3 baris kosong sebelum potong kertas (batas bawah)
+    // Tambah 3 baris kosong sebelum potong kertas
     const extraFeed = encoder.encode('\n\n\n');
     await bluetoothCharacteristic.writeValue(extraFeed);
     await new Promise(r => setTimeout(r, 50));
 
-    // Potong kertas (ESC i)
+    // Potong kertas
     const cut = encoder.encode('\x1B\x69');
     await bluetoothCharacteristic.writeValue(cut);
     await new Promise(r => setTimeout(r, 100));
