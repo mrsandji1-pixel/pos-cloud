@@ -5,7 +5,7 @@ async function hashPassword(pwd) {
   if (pwd === 'admin') return ADMIN_HASH;
   if (crypto.subtle) {
     const e = new TextEncoder(); const h = await crypto.subtle.digest('SHA-256', e.encode(pwd));
-    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
   let h = 0; for (let i=0;i<pwd.length;i++) { h = ((h<<5)-h) + pwd.charCodeAt(i); h|=0; }
   return 'fallback_'+Math.abs(h).toString(16);
@@ -53,11 +53,14 @@ function checkSession() {
       return true;
     } catch(e) { clearSession(); }
   }
+  // Jika tidak ada session, tampilkan form login
   document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
   return false;
 }
 
-// User management
+// User management (tidak berubah)
 async function tambahUser() {
   if (!currentUser || currentUser.role!=='admin') return;
   const u = document.getElementById('newUsername').value.trim();

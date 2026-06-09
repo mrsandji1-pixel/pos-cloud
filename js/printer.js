@@ -1,65 +1,22 @@
-// ===================== PRINTER.JS (Fixed GATT + Chunking) =====================
+// ===================== PRINTER.JS =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
-let keepAliveInterval = null;
-
-// Fungsi untuk menjaga koneksi tetap hidup (kirim ping setiap 10 detik)
-function startKeepAlive() {
-  stopKeepAlive();
-  keepAliveInterval = setInterval(async () => {
-    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-      try {
-        const encoder = new TextEncoder();
-        // Kirim karakter null sebagai ping (tidak tercetak)
-        await bluetoothCharacteristic.writeValue(encoder.encode('\x00'));
-      } catch (e) {
-        console.warn('KeepAlive gagal:', e.message);
-      }
-    }
-  }, 10000);
-}
-
-function stopKeepAlive() {
-  if (keepAliveInterval) {
-    clearInterval(keepAliveInterval);
-    keepAliveInterval = null;
-  }
-}
 
 async function sambungPrinter() {
   try {
-    // Jika sudah ada device, putuskan dulu
-    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-      await bluetoothDevice.gatt.disconnect();
-    }
-
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
     });
-
     const server = await bluetoothDevice.gatt.connect();
     const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
     bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-
-    // Mulai keep-alive
-    startKeepAlive();
-
-    // Dengarkan event disconnect
-    bluetoothDevice.addEventListener('gattserverdisconnected', () => {
-      updateStatusPrinter(false);
-      stopKeepAlive();
-      bluetoothCharacteristic = null;
-      alert('Printer terputus. Silakan sambungkan ulang.');
-    });
-
     updateStatusPrinter(true);
     alert('Printer terhubung!');
     await simpanPengaturanCetak();
   } catch (e) {
     console.error(e);
     updateStatusPrinter(false);
-    stopKeepAlive();
     alert('Gagal terhubung: ' + e.message);
   }
 }
@@ -69,7 +26,6 @@ async function putusPrinter() {
     await bluetoothDevice.gatt.disconnect();
     bluetoothDevice = null;
     bluetoothCharacteristic = null;
-    stopKeepAlive();
     updateStatusPrinter(false);
     alert('Koneksi printer diputus');
   }
@@ -90,13 +46,14 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom
+// Konversi base64 ke bitmap monokrom dengan ukuran kecil
 async function base64ToBitmap(base64, maxWidth) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      // Skala gambar ke lebar maksimal yang lebih kecil (200px untuk 80mm, 150px untuk 58mm)
       const scale = maxWidth / img.width;
       canvas.width = maxWidth;
       canvas.height = Math.round(img.height * scale);
@@ -111,7 +68,8 @@ async function base64ToBitmap(base64, maxWidth) {
             const px = x + bit;
             if (px < canvas.width) {
               const idx = (y * canvas.width + px) * 4;
-              const gray = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
+              const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+              const gray = 0.299 * r + 0.587 * g + 0.114 * b;
               if (gray < 128) byte |= (1 << (7 - bit));
             }
           }
@@ -125,7 +83,7 @@ async function base64ToBitmap(base64, maxWidth) {
   });
 }
 
-// Kirim perintah bitmap (GS v 0) dalam chunk
+// Kirim perintah bitmap ESC/POS GS v 0 dengan chunking
 async function sendBitmapCommand(width, height, data) {
   const w = Math.ceil(width / 8);
   const xL = w & 0xFF;
@@ -133,58 +91,42 @@ async function sendBitmapCommand(width, height, data) {
   const yL = height & 0xFF;
   const yH = (height >> 8) & 0xFF;
   const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
-  const fullCmd = new Uint8Array([...header, ...data]);
-
-  // Kirim per chunk 256 byte
-  for (let i = 0; i < fullCmd.length; i += 256) {
-    const chunk = fullCmd.slice(i, i + 256);
+  // Kirim header dulu
+  await bluetoothCharacteristic.writeValue(header);
+  await new Promise(r => setTimeout(r, 50));
+  // Kirim data bitmap dalam potongan 256 byte
+  const chunkSize = 256;
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.slice(i, i + chunkSize);
     await bluetoothCharacteristic.writeValue(chunk);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 30)); // jeda 30ms per chunk
   }
 }
 
 // Fungsi utama mengirim struk (logo + teks) ke printer
 async function cetakStrukKePrinter(logoBase64, teks) {
-  if (!bluetoothDevice || !bluetoothDevice.gatt.connected) {
+  if (!bluetoothDevice || !bluetoothCharacteristic) {
     alert('Printer tidak terhubung');
     return;
   }
-
-  // Pastikan karakteristik tersedia
-  if (!bluetoothCharacteristic) {
-    try {
-      const server = await bluetoothDevice.gatt.connect();
-      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-      startKeepAlive();
-    } catch (e) {
-      alert('Gagal menyambung ulang: ' + e.message);
-      return;
-    }
-  }
-
   try {
     const lebar = await getLebarKertasAktif();
-    const maxWidth = lebar === 80 ? 384 : 256;
+    // Lebar bitmap lebih kecil: 200px untuk 80mm, 150px untuk 58mm
+    const maxWidth = lebar === 80 ? 200 : 150;
 
     // Kirim logo jika ada
     if (logoBase64) {
-      try {
-        const bitmap = await base64ToBitmap(logoBase64, maxWidth);
-        await sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
-        // Feed setelah logo
-        const feed = new TextEncoder().encode('\n\n');
-        for (let i = 0; i < feed.length; i += 256) {
-          const chunk = feed.slice(i, i + 256);
-          await bluetoothCharacteristic.writeValue(chunk);
-          await new Promise(r => setTimeout(r, 50));
-        }
-      } catch (e) {
-        console.warn('Gagal mencetak logo:', e.message);
-      }
+      const bitmap = await base64ToBitmap(logoBase64, maxWidth);
+      await sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
+      // Jeda setelah logo
+      await new Promise(r => setTimeout(r, 300));
+      // Feed beberapa baris
+      const feed = new TextEncoder().encode('\n\n');
+      await bluetoothCharacteristic.writeValue(feed);
+      await new Promise(r => setTimeout(r, 100));
     }
 
-    // Kirim teks per baris
+    // Kirim teks
     const encoder = new TextEncoder();
     const lines = teks.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -194,19 +136,15 @@ async function cetakStrukKePrinter(logoBase64, teks) {
       for (let j = 0; j < data.byteLength; j += 256) {
         const chunk = data.slice(j, j + 256);
         await bluetoothCharacteristic.writeValue(chunk);
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 20));
       }
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 60));
     }
 
     // Potong kertas
     const cut = encoder.encode('\x1B\x69');
-    for (let i = 0; i < cut.length; i += 256) {
-      const chunk = cut.slice(i, i + 256);
-      await bluetoothCharacteristic.writeValue(chunk);
-      await new Promise(r => setTimeout(r, 50));
-    }
-    await new Promise(r => setTimeout(r, 150));
+    await bluetoothCharacteristic.writeValue(cut);
+    await new Promise(r => setTimeout(r, 100));
     alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
@@ -237,7 +175,8 @@ async function testPrint() {
   teks += 'Setting karakter sudah sesuai.\n';
   teks += garis + '\n';
 
-  if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+  if (bluetoothDevice && bluetoothCharacteristic) {
+    // Test print tidak pakai logo
     await cetakStrukKePrinter(null, teks);
   } else {
     const { jsPDF } = window.jspdf;
