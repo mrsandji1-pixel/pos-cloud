@@ -212,10 +212,10 @@ async function bayarDanCetak() {
       try { const fh = await workingDirHandle.getFileHandle(no+'.pdf',{create:true}); const w = await fh.createWritable(); await w.write(pdfBlob); await w.close(); } catch(e) {}
     }
 
-    if (bluetoothDevice && bluetoothCharacteristic) {
-      const teksStruk = buatStrukTeks(cart, total, bayar, kembali, toko, no, cust);
-      await cetakTeksKePrinter(teksStruk);
-    } else {
+   if (bluetoothDevice && bluetoothCharacteristic) {
+  const teksStruk = buatStrukTeks(cart, total, bayar, kembali, toko, no, cust);
+  await cetakStrukKePrinter(toko.logo || null, teksStruk);
+} else {
       const blobUrl = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = blobUrl; a.target = '_blank'; a.style.display = 'none';

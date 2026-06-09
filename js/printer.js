@@ -1,4 +1,4 @@
-// ===================== PRINTER.JS (Android Optimized) =====================
+// ===================== PRINTER.JS (Dengan Logo) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -46,31 +46,97 @@ function updateStatusPrinter(connected) {
   });
 }
 
-async function cetakTeksKePrinter(teks) {
+// Konversi base64 ke bitmap monokrom (array byte)
+async function base64ToBitmap(base64, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      // Skala gambar ke lebar maksimal (dalam pixel printer, biasanya 384 untuk 80mm)
+      const scale = maxWidth / img.width;
+      canvas.width = maxWidth;
+      canvas.height = Math.round(img.height * scale);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imageData.data;
+      const bytes = [];
+      // Setiap byte mewakili 8 pixel horizontal (0 = putih, 1 = hitam)
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x += 8) {
+          let byte = 0;
+          for (let bit = 0; bit < 8; bit++) {
+            const px = x + bit;
+            if (px < canvas.width) {
+              const idx = (y * canvas.width + px) * 4;
+              const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+              // Konversi ke grayscale, jika > 128 dianggap putih (0)
+              const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+              if (gray < 128) byte |= (1 << (7 - bit));
+            }
+          }
+          bytes.push(byte);
+        }
+      }
+      resolve({ width: canvas.width, height: canvas.height, data: bytes });
+    };
+    img.onerror = reject;
+    img.src = base64;
+  });
+}
+
+// Kirim perintah cetak bitmap (ESC/POS GS v 0)
+function sendBitmapCommand(width, height, data) {
+  const w = Math.ceil(width / 8);
+  const xL = w & 0xFF;
+  const xH = (w >> 8) & 0xFF;
+  const yL = height & 0xFF;
+  const yH = (height >> 8) & 0xFF;
+  return new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH, ...data]);
+}
+
+// Fungsi utama mengirim struk (logo + teks) ke printer
+async function cetakStrukKePrinter(logoBase64, teks) {
   if (!bluetoothCharacteristic) {
     alert('Printer tidak terhubung');
     return;
   }
   try {
+    const lebar = await getLebarKertasAktif();
+    const maxWidth = lebar === 80 ? 384 : 256; // 384 dot = 48 byte, 256 dot = 32 byte (standar ESC/POS)
+
+    // Kirim logo jika ada
+    if (logoBase64) {
+      const bitmap = await base64ToBitmap(logoBase64, maxWidth);
+      const cmd = sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
+      await bluetoothCharacteristic.writeValue(cmd);
+      // Jeda setelah logo
+      await new Promise(r => setTimeout(r, 500));
+      // Feed beberapa baris
+      const feed = new TextEncoder().encode('\n\n');
+      await bluetoothCharacteristic.writeValue(feed);
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    // Kirim teks
     const encoder = new TextEncoder();
-    // Pisahkan per baris untuk menghindari buffer penuh di Android
     const lines = teks.split('\n');
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
-      if (i < lines.length - 1) line += '\n'; // tambahkan newline kecuali baris terakhir
+      if (i < lines.length - 1) line += '\n';
       const data = encoder.encode(line);
-      // Kirim per chunk kecil (256 byte) dengan delay antar chunk
       for (let j = 0; j < data.byteLength; j += 256) {
         const chunk = data.slice(j, j + 256);
         await bluetoothCharacteristic.writeValue(chunk);
-        await new Promise(resolve => setTimeout(resolve, 20)); // jeda 20ms antar chunk
+        await new Promise(r => setTimeout(r, 20));
       }
-      await new Promise(resolve => setTimeout(resolve, 60)); // jeda 60ms antar baris
+      await new Promise(r => setTimeout(r, 60));
     }
-    // Kirim perintah potong kertas (ESC/POS)
-    const cutPaper = encoder.encode('\x1B\x69');
-    await bluetoothCharacteristic.writeValue(cutPaper);
-    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Potong kertas
+    const cut = encoder.encode('\x1B\x69');
+    await bluetoothCharacteristic.writeValue(cut);
+    await new Promise(r => setTimeout(r, 100));
     alert('Cetak berhasil');
   } catch (e) {
     console.error(e);
@@ -102,7 +168,8 @@ async function testPrint() {
   teks += garis + '\n';
 
   if (bluetoothDevice && bluetoothCharacteristic) {
-    await cetakTeksKePrinter(teks);
+    // Test print tidak pakai logo
+    await cetakStrukKePrinter(null, teks);
   } else {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: [lebar, 40] });
