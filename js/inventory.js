@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Perbaikan CORS QR Code) =====================
+// ===================== INVENTORY.JS (Label QR 50% Size) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,7 +107,7 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE (API QR Server – CORS enabled) ==========
+// ========== CETAK LABEL QR CODE (50% Size) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
@@ -117,31 +117,37 @@ async function cetakLabelQR(barcode) {
   const barcodeText = product.barcode || '';
   const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   
-  // URL API QR Server (CORS enabled)
+  // QR code URL
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
+  // Ukuran label 50%: 29mm x 15mm
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [58, 30] });
+  const doc = new jsPDF({ unit: 'mm', format: [29, 15] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    doc.addImage(qrImage, 'PNG', 2, 2, 12, 12);
+    // QR code di kiri (6mm x 6mm)
+    doc.addImage(qrImage, 'PNG', 1, 1, 6, 6);
     
-    doc.setFontSize(8);
-    const namaLines = doc.splitTextToSize(nama, 40);
-    doc.text(namaLines, 16, 6);
-    
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text(harga, 16, 16);
-    
+    // Nama produk (2 baris, lebih kecil)
     doc.setFontSize(5);
-    doc.setFont(undefined, 'normal');
-    doc.text('Cetak: ' + tglCetak, 16, 20);
+    const namaLines = doc.splitTextToSize(nama, 20);
+    doc.text(namaLines, 8, 3);
     
+    // Harga jual (lebih kecil)
     doc.setFontSize(6);
-    doc.text(barcodeText, 2, 28);
+    doc.setFont(undefined, 'bold');
+    doc.text(harga, 8, 8);
+    
+    // Tanggal cetak (sangat kecil)
+    doc.setFontSize(3);
+    doc.setFont(undefined, 'normal');
+    doc.text('Cetak: ' + tglCetak, 8, 10);
+    
+    // Barcode text di paling bawah
+    doc.setFontSize(4);
+    doc.text(barcodeText, 1, 14);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
