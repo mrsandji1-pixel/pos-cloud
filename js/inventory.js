@@ -133,21 +133,21 @@ async function cetakLabelQR(barcode) {
     // Nama produk (font 4pt, 50% dari 8pt)
     doc.setFontSize(4);
     const namaLines = doc.splitTextToSize(nama, 15);
-    doc.text(namaLines, 8, 3);  // x=8, y=3
+    doc.text(namaLines, 8, 2);  // x=8, y=2
     
     // Harga jual (font 5pt, 50% dari 10pt)
     doc.setFontSize(5);
     doc.setFont(undefined, 'bold');
-    doc.text(harga, 8, 7);
+    doc.text(harga, 8, 6);
     
     // Barcode text di baris ke-4 (sebelum tanggal), font 3pt
-    doc.setFontSize(2.5);
+    doc.setFontSize(2.3);
     doc.setFont(undefined, 'normal');
-    doc.text(barcodeText, 1, 9);
+    doc.text(barcodeText, 1, 8);
     
     // Tanggal cetak di baris ke-5, tanpa kata "Cetak"
     doc.setFontSize(2);
-    doc.text(tglCetak, 8, 9);
+    doc.text(tglCetak, 8, 8);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
