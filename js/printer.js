@@ -1,4 +1,4 @@
-// ===================== PRINTER.JS (Final Fix - Header Muncul) =====================
+// ===================== PRINTER.JS (Nonaktifkan Logo, Fokus Header Normal) =====================
 let bluetoothDevice = null;
 let bluetoothCharacteristic = null;
 
@@ -46,108 +46,36 @@ function updateStatusPrinter(connected) {
   });
 }
 
-// Konversi base64 ke bitmap monokrom (lebar logo 64px)
-async function base64ToBitmap(base64, maxWidth) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const scale = maxWidth / img.width;
-      canvas.width = maxWidth;
-      canvas.height = Math.round(img.height * scale);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const pixels = imageData.data;
-      const bytes = [];
-      for (let y = 0; y < canvas.height; y++) {
-        for (let x = 0; x < canvas.width; x += 8) {
-          let byte = 0;
-          for (let bit = 0; bit < 8; bit++) {
-            const px = x + bit;
-            if (px < canvas.width) {
-              const idx = (y * canvas.width + px) * 4;
-              const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
-              const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-              if (gray < 128) byte |= (1 << (7 - bit));
-            }
-          }
-          bytes.push(byte);
-        }
-      }
-      resolve({ width: canvas.width, height: canvas.height, data: bytes });
-    };
-    img.onerror = reject;
-    img.src = base64;
-  });
-}
-
-function sendBitmapCommand(width, height, data) {
-  const w = Math.ceil(width / 8);
-  const xL = w & 0xFF;
-  const xH = (w >> 8) & 0xFF;
-  const yL = height & 0xFF;
-  const yH = (height >> 8) & 0xFF;
-  const header = [0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH];
-  return new Uint8Array([...header, ...data]);
-}
-
+// Kirim teks ke printer tanpa logo
 async function cetakStrukKePrinter(logoBase64, teks) {
   if (!bluetoothCharacteristic) {
     alert('Printer tidak terhubung');
     return;
   }
   try {
-    const lebar = await getLebarKertasAktif();
-    const maxWidth = 64; // logo kecil
+    // Reset printer ke default
+    const reset = new Uint8Array([0x1B, 0x40]);
+    await bluetoothCharacteristic.writeValue(reset);
+    await new Promise(r => setTimeout(r, 50));
 
-    // Inisialisasi printer di awal
-    const init = new Uint8Array([0x1B, 0x40]); // ESC @
-    await bluetoothCharacteristic.writeValue(init);
-    await new Promise(r => setTimeout(r, 100));
+    // *** LOGO DINONAKTIFKAN SEMENTARA ***
+    // if (logoBase64) { ... } // dilewati
 
-    // Kirim logo jika ada
-    if (logoBase64) {
-      const bitmap = await base64ToBitmap(logoBase64, maxWidth);
-      const cmd = sendBitmapCommand(bitmap.width, bitmap.height, bitmap.data);
-      for (let i = 0; i < cmd.byteLength; i += 512) {
-        const chunk = cmd.slice(i, i + 512);
-        await bluetoothCharacteristic.writeValue(chunk);
-      }
-      // Tunggu printer selesai mencetak logo
-      await new Promise(r => setTimeout(r, 300));
-
-      // ** JANGAN RESET PRINTER ** - biarkan printer menyelesaikan mode bitmap
-      // Beri jarak setelah logo dengan feed 3 baris kosong
-      const feed = new TextEncoder().encode('\n\n\n');
-      await bluetoothCharacteristic.writeValue(feed);
-      await new Promise(r => setTimeout(r, 50));
-
-      // ** KEMBALI KE MODE TEKS TANPA RESET **
-      // Cukup kirim perintah rata kiri dan font normal
-      const alignLeft = new Uint8Array([0x1B, 0x61, 0x00]); // ESC a 0
-      await bluetoothCharacteristic.writeValue(alignLeft);
-      await new Promise(r => setTimeout(r, 30));
-      // Font normal (ESC ! 0)
-      const fontNormal = new Uint8Array([0x1B, 0x21, 0x00]);
-      await bluetoothCharacteristic.writeValue(fontNormal);
-      await new Promise(r => setTimeout(r, 30));
-    }
-
-    // Kirim teks per baris
+    // Kirim teks per baris dengan jeda 50ms antar baris
     const encoder = new TextEncoder();
     const lines = teks.split('\n');
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
       if (i < lines.length - 1) line += '\n';
       const data = encoder.encode(line);
-      // Kirim per baris tanpa chunking jika memungkinkan
-      await bluetoothCharacteristic.writeValue(data);
-      // Jeda 30ms antar baris untuk kestabilan
-      await new Promise(r => setTimeout(r, 30));
+      for (let j = 0; j < data.byteLength; j += 256) {
+        const chunk = data.slice(j, j + 256);
+        await bluetoothCharacteristic.writeValue(chunk);
+      }
+      await new Promise(r => setTimeout(r, 50));
     }
 
-    // Tambah 3 baris kosong sebelum potong kertas
+    // Tambah 3 baris kosong sebelum potong kertas (batas bawah)
     const extraFeed = encoder.encode('\n\n\n');
     await bluetoothCharacteristic.writeValue(extraFeed);
     await new Promise(r => setTimeout(r, 50));
