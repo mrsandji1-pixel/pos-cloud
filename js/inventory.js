@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Label Landscape 50%) =====================
+// ===================== INVENTORY.JS (Label QR – Batas Bawah Pas) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,7 +107,7 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE (Landscape, 50%, barcode di baris 4) ==========
+// ========== CETAK LABEL QR CODE ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
@@ -115,37 +115,38 @@ async function cetakLabelQR(barcode) {
   const nama = product.nama || 'Produk';
   const harga = 'Rp ' + (product.harga_jual || 0).toLocaleString('id');
   const barcodeText = product.barcode || '';
-  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   
-  // QR code 50% lebih kecil (75x75 px)
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=${encodeURIComponent(barcodeText)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Landscape: lebar 58mm, tinggi 15mm
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [15, 33] });
+  // Tinggi total: QR 6mm + margin atas 1mm + margin bawah 2mm = 9mm, tapi perlu ruang untuk teks (max 9mm).
+  // Kita hitung dinamis: ambil max tinggi QR (6mm) dan tinggi teks (perkiraan 4mm + 2mm + 2mm = 8mm) + margin.
+  // Karena label kecil, kita buat fix 12mm (cukup longgar).
+  const doc = new jsPDF({ unit: 'mm', format: [58, 12] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    // QR code di kiri, ukuran 6x6 mm (50% dari 12x12)
+    // QR code di kiri, 6x6 mm, posisi y=1
     doc.addImage(qrImage, 'PNG', 1, 1, 6, 6);
     
-    // Nama produk (font 4pt, 50% dari 8pt)
+    // Nama produk (font 4pt)
     doc.setFontSize(4);
     const namaLines = doc.splitTextToSize(nama, 15);
-    doc.text(namaLines, 8, 2);  // x=8, y=2
+    doc.text(namaLines, 8, 2);
     
-    // Harga jual (font 5pt, 50% dari 10pt)
+    // Harga jual (font 5pt, bold)
     doc.setFontSize(5);
     doc.setFont(undefined, 'bold');
     doc.text(harga, 8, 6);
     
-    // Barcode text di baris ke-4 (sebelum tanggal), font 3pt
-    doc.setFontSize(2.3);
+    // Barcode text (font 3pt) di bawah kiri, y=9
+    doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
     doc.text(barcodeText, 1, 8);
     
-    // Tanggal cetak di baris ke-5, tanpa kata "Cetak"
+    // Tanggal cetak (font 2pt) di kanan bawah, y=9
     doc.setFontSize(2);
     doc.text(tglCetak, 8, 8);
     
@@ -154,7 +155,7 @@ async function cetakLabelQR(barcode) {
     window.open(url, '_blank');
   };
   qrImage.onerror = () => {
-    alert('Gagal memuat QR code. Coba lagi nanti.');
+    alert('Gagal memuat QR code.');
   };
   qrImage.src = qrUrl;
 }
