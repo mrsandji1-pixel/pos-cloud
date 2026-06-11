@@ -122,7 +122,7 @@ async function cetakLabelQR(barcode) {
 
   // Landscape: lebar 58mm, tinggi 15mm
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [33, 15] });
+  const doc = new jsPDF({ unit: 'mm', format: [15, 33] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
