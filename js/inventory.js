@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Label QR 33x15mm Fix) =====================
+// ===================== INVENTORY.JS (Label QR 33x15mm Fix Ukuran Halaman) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,7 +107,7 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE (33x15mm landscape) ==========
+// ========== CETAK LABEL QR CODE (33x15mm, halaman tunggal) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
@@ -119,36 +119,44 @@ async function cetakLabelQR(barcode) {
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Format landscape: lebar 33mm, tinggi 15mm
+  // Ukuran kertas dalam mm: 33 x 15
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: [33, 15] });
+  
+  // ** Pastikan tidak ada halaman tambahan **
+  // hapus halaman kedua jika ada (kadang jsPDF membuat halaman default A4)
+  if (doc.internal.pages.length > 1) {
+    for (let i = doc.internal.pages.length - 1; i > 1; i--) {
+      doc.deletePage(i);
+    }
+  }
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    // QR code 6x6mm di pojok kiri atas (margin 1mm)
+    // QR code 6x6mm
     doc.addImage(qrImage, 'PNG', 1, 1, 6, 6);
     
-    // Nama produk (font 4pt), mulai dari x=8, y=2
+    // Nama produk (font 4pt)
     doc.setFontSize(4);
-    const namaLines = doc.splitTextToSize(nama, 22); // lebar kolom kanan 33-8=25mm
+    const namaLines = doc.splitTextToSize(nama, 22);
     doc.text(namaLines, 8, 2);
     
-    // Harga jual (font 5pt, bold), y=6
+    // Harga jual (font 5pt, bold)
     doc.setFontSize(5);
     doc.setFont(undefined, 'bold');
     doc.text(harga, 8, 6);
     
-    // Barcode text (font 3pt), di bawah QR code, y=9
+    // Barcode text (font 3pt)
     doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
     doc.text(barcodeText, 1, 9);
     
-    // Tanggal cetak (font 2pt), di kanan bawah, y=9
+    // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
     doc.text(tglCetak, 8, 9);
     
-    // Garis potong (opsional) di tepi bawah
+    // Garis potong (opsional)
     doc.setLineWidth(0.1);
     doc.line(0, 14.5, 33, 14.5);
     
