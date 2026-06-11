@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Dengan Cetak Label QR) =====================
+// ===================== INVENTORY.JS (Perbaikan CORS QR Code) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -98,7 +98,7 @@ async function refreshProductList() {
   all.forEach(p => {
     const row = tbody.insertRow();
     const namaCell = `<td style="display:flex;align-items:center;gap:6px;">${p.foto ? `<img src="${p.foto}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;">` : '<div style="width:30px;height:30px;background:#e0e0e0;border-radius:4px;display:flex;align-items:center;justify-content:center;">📦</div>'}${p.nama || ''}</td>`;
-    const aksi = isAdmin ? `<button class="btn-sm" onclick="editProdukDariDaftar('${p.barcode}')">✏️</button> <button class="btn-sm btn-danger" onclick="hapusProdukDariDaftar('${p.barcode}')">🗑</button> <button class="btn-sm" onclick="cetakLabelQR('${p.barcode}')">🏷️ QR</button>` : `<button class="btn-sm" onclick="cetakLabelQR('${p.barcode}')">🏷️ QR</button>`;
+    const aksi = (isAdmin ? `<button class="btn-sm" onclick="editProdukDariDaftar('${p.barcode}')">✏️</button> <button class="btn-sm btn-danger" onclick="hapusProdukDariDaftar('${p.barcode}')">🗑</button> ` : '') + `<button class="btn-sm" onclick="cetakLabelQR('${p.barcode}')">🏷️ QR</button>`;
     row.innerHTML = `<td>${p.barcode || ''}</td>${namaCell}<td>${p.kategori || '-'}</td><td>${p.keterangan || '-'}</td><td>Rp${(p.harga_jual || 0).toLocaleString('id')}</td><td>${p.stok || 0}</td><td>${aksi}</td>`;
   });
 }
@@ -107,57 +107,48 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE ==========
+// ========== CETAK LABEL QR CODE (API QR Server – CORS enabled) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
 
-  // Siapkan data untuk label
   const nama = product.nama || 'Produk';
   const harga = 'Rp ' + (product.harga_jual || 0).toLocaleString('id');
   const barcodeText = product.barcode || '';
   const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   
-  // URL untuk Google Chart API QR Code
-  const qrUrl = `https://chart.googleapis.com/chart?chs=150x150&cht=qr&chl=${encodeURIComponent(barcodeText)}&choe=UTF-8`;
+  // URL API QR Server (CORS enabled)
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Buat PDF untuk label (ukuran 58mm x 30mm)
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: [58, 30] });
-  
-  // Muat gambar QR code
+
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    // QR code di kiri (12mm x 12mm)
     doc.addImage(qrImage, 'PNG', 2, 2, 12, 12);
     
-    // Nama produk (2 baris, di kanan QR)
     doc.setFontSize(8);
     const namaLines = doc.splitTextToSize(nama, 40);
     doc.text(namaLines, 16, 6);
     
-    // Harga jual
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
     doc.text(harga, 16, 16);
     
-    // Tanggal cetak (sangat kecil di bawah)
     doc.setFontSize(5);
     doc.setFont(undefined, 'normal');
     doc.text('Cetak: ' + tglCetak, 16, 20);
     
-    // Barcode text di paling bawah
     doc.setFontSize(6);
     doc.text(barcodeText, 2, 28);
     
-    // Buka PDF di tab baru
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
   qrImage.onerror = () => {
-    alert('Gagal memuat QR code');
+    alert('Gagal memuat QR code. Coba lagi nanti.');
   };
   qrImage.src = qrUrl;
 }
