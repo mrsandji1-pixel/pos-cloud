@@ -123,7 +123,7 @@ async function cetakLabelQR(barcode) {
   // Tinggi total: QR 6mm + margin atas 1mm + margin bawah 2mm = 9mm, tapi perlu ruang untuk teks (max 9mm).
   // Kita hitung dinamis: ambil max tinggi QR (6mm) dan tinggi teks (perkiraan 4mm + 2mm + 2mm = 8mm) + margin.
   // Karena label kecil, kita buat fix 12mm (cukup longgar).
-  const doc = new jsPDF({ unit: 'mm', format: [58, 30] });
+  const doc = new jsPDF({ unit: 'mm', format: [58, 20] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
@@ -142,7 +142,7 @@ async function cetakLabelQR(barcode) {
     doc.text(harga, 8, 6);
     
     // Barcode text (font 3pt) di bawah kiri, y=9
-    doc.setFontSize(3);
+    doc.setFontSize(2.3);
     doc.setFont(undefined, 'normal');
     doc.text(barcodeText, 1, 8);
     
