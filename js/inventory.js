@@ -115,7 +115,7 @@ async function cetakLabelQR(barcode) {
   const nama = product.nama || 'Produk';
   const harga = 'Rp ' + (product.harga_jual || 0).toLocaleString('id');
   const barcodeText = product.barcode || '';
-  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric', year: 'numeric' });
   
   // QR code 50% lebih kecil (75x75 px)
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=${encodeURIComponent(barcodeText)}`;
@@ -128,12 +128,12 @@ async function cetakLabelQR(barcode) {
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
     // QR code di kiri, ukuran 6x6 mm (50% dari 12x12)
-    doc.addImage(qrImage, 'PNG', 2, 2, 6, 6);
+    doc.addImage(qrImage, 'PNG', 1, 1, 6, 6);
     
     // Nama produk (font 4pt, 50% dari 8pt)
     doc.setFontSize(4);
-    const namaLines = doc.splitTextToSize(nama, 20);
-    doc.text(namaLines, 9, 3);  // x=8, y=3
+    const namaLines = doc.splitTextToSize(nama, 15);
+    doc.text(namaLines, 9, 3);  // x=9, y=3
     
     // Harga jual (font 5pt, 50% dari 10pt)
     doc.setFontSize(5);
@@ -143,11 +143,11 @@ async function cetakLabelQR(barcode) {
     // Barcode text di baris ke-4 (sebelum tanggal), font 3pt
     doc.setFontSize(2);
     doc.setFont(undefined, 'normal');
-    doc.text(barcodeText, 2, 10);
+    doc.text(barcodeText, 2, 9);
     
     // Tanggal cetak di baris ke-5, tanpa kata "Cetak"
     doc.setFontSize(2);
-    doc.text(tglCetak, 12, 10);
+    doc.text(tglCetak, 12, 9);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
