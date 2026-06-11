@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Label QR – Batas Bawah Pas) =====================
+// ===================== INVENTORY.JS (Label QR 33x15mm) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,7 +107,7 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE ==========
+// ========== CETAK LABEL QR CODE (33x15mm, Landscape) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
@@ -119,36 +119,34 @@ async function cetakLabelQR(barcode) {
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
+  // Landscape 33mm x 15mm
   const { jsPDF } = window.jspdf;
-  // Tinggi total: QR 6mm + margin atas 1mm + margin bawah 2mm = 9mm, tapi perlu ruang untuk teks (max 9mm).
-  // Kita hitung dinamis: ambil max tinggi QR (6mm) dan tinggi teks (perkiraan 4mm + 2mm + 2mm = 8mm) + margin.
-  // Karena label kecil, kita buat fix 12mm (cukup longgar).
-  const doc = new jsPDF({ unit: 'mm', format: [38, 30] });
+  const doc = new jsPDF({ unit: 'mm', format: [33, 15] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    // QR code di kiri, 6x6 mm, posisi y=1
-    doc.addImage(qrImage, 'PNG', 1, 1, 6, 6);
+    // QR code di kiri, ukuran 5x5 mm
+    doc.addImage(qrImage, 'PNG', 1, 1, 5, 5);
     
-    // Nama produk (font 4pt)
+    // Nama produk (font 3pt)
+    doc.setFontSize(3);
+    const namaLines = doc.splitTextToSize(nama, 18);
+    doc.text(namaLines, 7, 2);
+    
+    // Harga jual (font 4pt, bold)
     doc.setFontSize(4);
-    const namaLines = doc.splitTextToSize(nama, 15);
-    doc.text(namaLines, 8, 2);
-    
-    // Harga jual (font 5pt, bold)
-    doc.setFontSize(5);
     doc.setFont(undefined, 'bold');
-    doc.text(harga, 8, 6);
+    doc.text(harga, 7, 5);
     
-    // Barcode text (font 3pt) di bawah kiri, y=9
-    doc.setFontSize(2.3);
+    // Barcode text (font 2.5pt)
+    doc.setFontSize(2.5);
     doc.setFont(undefined, 'normal');
-    doc.text(barcodeText, 1, 8);
+    doc.text(barcodeText, 1, 7);
     
-    // Tanggal cetak (font 2pt) di kanan bawah, y=9
+    // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
-    doc.text(tglCetak, 8, 8);
+    doc.text(tglCetak, 7, 7);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
