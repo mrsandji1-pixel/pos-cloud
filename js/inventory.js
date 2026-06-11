@@ -120,9 +120,9 @@ async function cetakLabelQR(barcode) {
   // QR code 50% lebih kecil (75x75 px)
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=${encodeURIComponent(barcodeText)}`;
 
-  // Landscape: lebar 58mm, tinggi 30mm
+  // Landscape: lebar 58mm, tinggi 15mm
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [58, 30] });
+  const doc = new jsPDF({ unit: 'mm', format: [58, 15] });
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
