@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Label QR 33x15mm Fix Ukuran Halaman) =====================
+// ===================== INVENTORY.JS (Label QR 33x15mm Landscape) =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,7 +107,7 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
-// ========== CETAK LABEL QR CODE (33x15mm, halaman tunggal) ==========
+// ========== CETAK LABEL QR CODE (33x15mm LANDSCAPE) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
@@ -119,12 +119,11 @@ async function cetakLabelQR(barcode) {
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Ukuran kertas dalam mm: 33 x 15
+  // Landscape: lebar 33mm, tinggi 15mm (orientation landscape)
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [33, 15] });
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [33, 15] });
   
-  // ** Pastikan tidak ada halaman tambahan **
-  // hapus halaman kedua jika ada (kadang jsPDF membuat halaman default A4)
+  // Hapus halaman default jika ada (biasanya A4)
   if (doc.internal.pages.length > 1) {
     for (let i = doc.internal.pages.length - 1; i > 1; i--) {
       doc.deletePage(i);
