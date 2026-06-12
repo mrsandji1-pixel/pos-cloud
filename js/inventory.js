@@ -115,7 +115,7 @@ async function cetakLabelQR(barcode) {
   const nama = product.nama || 'Produk';
   const harga = 'Rp ' + (product.harga_jual || 0).toLocaleString('id');
   const barcodeText = product.barcode || '';
-  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric', year: 'numeric' });
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
@@ -136,12 +136,12 @@ async function cetakLabelQR(barcode) {
     // QR code 6x6mm
     doc.addImage(qrImage, 'PNG', 1, 1, 8, 8);
     
-    // Nama produk (font 4pt)
-    doc.setFontSize(4);
-    const namaLines = doc.splitTextToSize(nama, 25);
+    // Nama produk (font 5pt)
+    doc.setFontSize(5);
+    const namaLines = doc.splitTextToSize(nama, 23);
     doc.text(namaLines, 10, 2);
     
-    // Harga jual (font 5pt, bold)
+    // Harga jual (font 6pt, bold)
     doc.setFontSize(6);
     doc.setFont(undefined, 'bold');
     doc.text(harga, 10, 8);
