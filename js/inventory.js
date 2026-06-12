@@ -136,18 +136,18 @@ async function cetakLabelQR(barcode) {
     // QR code 6x6mm
     doc.addImage(qrImage, 'PNG', 1, 1, 8, 8);
     
-    // Nama produk (font 3pt)
-    doc.setFontSize(5);
-    const namaLines = doc.splitTextToSize(nama, 22);
+    // Nama produk (font 4pt)
+    doc.setFontSize(4);
+    const namaLines = doc.splitTextToSize(nama, 25);
     doc.text(namaLines, 10, 2);
     
     // Harga jual (font 5pt, bold)
-    doc.setFontSize(5);
+    doc.setFontSize(6);
     doc.setFont(undefined, 'bold');
-    doc.text(harga, 10, 6);
+    doc.text(harga, 10, 8);
     
     // Barcode text (font 3pt)
-    doc.setFontSize(2.3);
+    doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
     doc.text(barcodeText, 1, 10);
     
