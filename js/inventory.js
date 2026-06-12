@@ -149,15 +149,15 @@ async function cetakLabelQR(barcode) {
     // Barcode text (font 3pt)
     doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
-    doc.text(barcodeText, 1, 9);
+    doc.text(barcodeText, 1, 8);
     
     // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
-    doc.text(tglCetak, 8, 9);
+    doc.text(tglCetak, 8, 8);
     
     // Garis potong (opsional)
-    doc.setLineWidth(0.1);
-    doc.line(0, 14.5, 33, 14.5);
+    // doc.setLineWidth(0.1);
+    // doc.line(0, 14.5, 33, 14.5);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
