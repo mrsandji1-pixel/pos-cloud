@@ -154,12 +154,12 @@ async function cetakLabelQR(barcode) {
     // Nama produk (font 5pt)
     doc.setFontSize(5);
     const namaLines = doc.splitTextToSize(nama, 23);
-    doc.text(namaLines, 11, 3);
+    doc.text(namaLines, 12, 3);
     
     // Harga jual (font 6pt, bold)
     doc.setFontSize(6);
     doc.setFont(undefined, 'bold');
-    doc.text(harga, 11, 9);
+    doc.text(harga, 12, 9);
     
     // Barcode text (font 3pt)
     doc.setFontSize(3);
@@ -168,7 +168,7 @@ async function cetakLabelQR(barcode) {
     
     // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
-    doc.text(tglCetak, 11, 12);
+    doc.text(tglCetak, 12, 12);
     
     // Garis potong (opsional)
     // doc.setLineWidth(0.1);
