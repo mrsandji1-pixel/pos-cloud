@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Label QR 33x15mm Landscape) =====================
+// ===================== INVENTORY.JS =====================
 function setupInventory() {
   document.getElementById('prodBarcode').onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); cariAtauTambahProduk(); }
@@ -107,6 +107,22 @@ function filterProductList() { /* ... */ }
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
+// ========== GENERATE BARCODE ==========
+function generateBarcode() {
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = ('0' + (now.getMonth() + 1)).slice(-2);
+  const d = ('0' + now.getDate()).slice(-2);
+  const h = ('0' + now.getHours()).slice(-2);
+  const i = ('0' + now.getMinutes()).slice(-2);
+  const s = ('0' + now.getSeconds()).slice(-2);
+  // Format: YYMMDDHHMMSS (12 digit)
+  const barcode = y + m + d + h + i + s;
+  document.getElementById('prodBarcode').value = barcode;
+  // Trigger pencarian/tambah produk dengan barcode baru
+  cariAtauTambahProduk();
+}
+
 // ========== CETAK LABEL QR CODE (33x15mm LANDSCAPE) ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
@@ -115,15 +131,14 @@ async function cetakLabelQR(barcode) {
   const nama = product.nama || 'Produk';
   const harga = 'Rp ' + (product.harga_jual || 0).toLocaleString('id');
   const barcodeText = product.barcode || '';
-  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Landscape: lebar 33mm, tinggi 15mm (orientation landscape)
+  // Landscape: lebar 33mm, tinggi 15mm
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [33, 15] });
   
-  // Hapus halaman default jika ada (biasanya A4)
   if (doc.internal.pages.length > 1) {
     for (let i = doc.internal.pages.length - 1; i > 1; i--) {
       doc.deletePage(i);
@@ -133,27 +148,27 @@ async function cetakLabelQR(barcode) {
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-    // QR code 6x6mm
-    doc.addImage(qrImage, 'PNG', 1, 1, 8, 8);
+   // QR code 9x9mm
+    doc.addImage(qrImage, 'PNG', 2, 2, 9, 9);
     
     // Nama produk (font 5pt)
     doc.setFontSize(5);
     const namaLines = doc.splitTextToSize(nama, 23);
-    doc.text(namaLines, 10, 2);
+    doc.text(namaLines, 11, 3);
     
     // Harga jual (font 6pt, bold)
     doc.setFontSize(6);
     doc.setFont(undefined, 'bold');
-    doc.text(harga, 10, 8);
+    doc.text(harga, 11, 9);
     
     // Barcode text (font 3pt)
     doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
-    doc.text(barcodeText, 1, 10);
+    doc.text(barcodeText, 2, 12);
     
     // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
-    doc.text(tglCetak, 10, 10);
+    doc.text(tglCetak, 11, 12);
     
     // Garis potong (opsional)
     // doc.setLineWidth(0.1);
