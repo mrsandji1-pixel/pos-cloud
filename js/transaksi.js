@@ -421,57 +421,32 @@ async function bayarDanCetak() {
 
 // ========== FUNGSI STRUK TEKS (BLUETOOTH) – DIPERBAIKI TOTAL ==========
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
-  const garis = '=============================='; // 30 karakter
-  const garisTipis = '------------------------------';
-
-  // Pastikan semua data string agar tidak [object Object]
-  const namaToko = toko?.nama || 'TOKO';
-  const alamatToko = toko?.alamat || '';
-  const footerToko = toko?.footer || '';
-  const customer = cust || '-';
-  const tgl = new Date().toLocaleString('id-ID');
-
   let teks = '';
-  // Header
-  teks += namaToko + '\n';
-  if (alamatToko) teks += alamatToko + '\n';
-  teks += 'No   : ' + no + '\n';
-  teks += 'Tgl  : ' + tgl + '\n';
-  teks += 'Cust : ' + customer + '\n';
-  teks += garis + '\n';
-
-  // Item header
-  teks += 'Item                Qty   Harga\n';
-  teks += garisTipis + '\n';
-
-  cart.forEach(item => {
-    const nama = item.nama.length > 16 ? item.nama.substring(0, 15) + '.' : item.nama.padEnd(16);
-    const qty = item.qty.toString().padStart(3);
-    const harga = ('Rp' + item.harga.toLocaleString('id')).padStart(8);
-    let baris = nama + ' ' + qty + ' ' + harga;
-    teks += baris + '\n';
-
-    if (item.diskon) {
-      teks += '   Diskon item: -Rp' + item.diskon.toLocaleString('id') + '\n';
+  teks += toko.nama + '\n';
+  teks += (toko.alamat || '') + '\n';
+  teks += 'No: ' + no + '\n';
+  teks += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
+  teks += 'Customer: ' + (cust || '-') + '\n';
+  teks += '------------------------------\n';
+  teks += 'Item           Qty  Harga   Subtotal\n';
+  cart.forEach(i => {
+    const sub = i.harga * i.qty;
+    teks += i.nama.padEnd(15) + i.qty.toString().padStart(3) + '  ' + i.harga.toLocaleString('id').padStart(8) + '  ' + (sub - (i.diskon||0)).toLocaleString('id').padStart(10) + '\n';
+    if (i.diskon) {
+      teks += '  Diskon item: -' + i.diskon.toLocaleString('id') + '\n';
     }
   });
-
-  teks += garisTipis + '\n';
-  // Rincian
-  teks += 'Subtotal : Rp ' + subtotal1.toLocaleString('id') + '\n';
+  teks += '------------------------------\n';
+  teks += 'Subtotal:'.padEnd(25) + 'Rp' + subtotal1.toLocaleString('id') + '\n';
   if (totalDiskon > 0) {
-    teks += 'Diskon   : -Rp ' + totalDiskon.toLocaleString('id') + '\n';
+    teks += 'Diskon:'.padEnd(25) + '-Rp' + totalDiskon.toLocaleString('id') + '\n';
   }
-  teks += garis + '\n';
-  teks += 'TOTAL    : Rp ' + grandTotal.toLocaleString('id') + '\n';
-  teks += 'Bayar    : Rp ' + bayar.toLocaleString('id') + '\n';
-  teks += 'Kembali  : Rp ' + kembali.toLocaleString('id') + '\n';
-  if (footerToko) {
-    teks += '\n' + footerToko + '\n';
+  teks += 'TOTAL:'.padEnd(25) + 'Rp' + grandTotal.toLocaleString('id') + '\n';
+  teks += 'Bayar:'.padEnd(25) + 'Rp' + bayar.toLocaleString('id') + '\n';
+  teks += 'Kembali:'.padEnd(25) + 'Rp' + kembali.toLocaleString('id') + '\n';
+  if (toko.footer) {
+    teks += '\n' + toko.footer + '\n';
   }
-  teks += garis + '\n';
-  teks += '   Terima Kasih   \n';
-
   return teks;
 }
 
