@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Diskon Manual + Setting + Struk Rinci) =====================
+// ===================== TRANSAKSI.JS (Lengkap: Pencarian, Diskon, Struk Rinci) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -30,6 +30,7 @@ async function setupTransaksi() {
     nominalDiv.appendChild(btn);
   });
 
+  // Input scanning barcode
   document.getElementById('scanInputTrans').onkeydown = e => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -41,10 +42,78 @@ async function setupTransaksi() {
     }
   };
 
+  // Pencarian produk (searchProduct)
+  const searchInput = document.getElementById('searchProduct');
+  if (searchInput) {
+    searchInput.oninput = function() {
+      searchProductFn(this.value);
+    };
+  }
+
   renderCart();
 }
 
-// --- Pencarian & Tambah Produk ---
+// ========== PENCARIAN PRODUK ==========
+function searchProductFn(query) {
+  clearTimeout(searchTimer);
+  const div = document.getElementById('searchResults');
+  if (!query || query.length < 2) {
+    div.style.display = 'none';
+    return;
+  }
+  searchTimer = setTimeout(async () => {
+    const q = query.trim();
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('*')
+        .or(`nama.ilike.%${q}%,barcode.ilike.%${q}%,kategori.ilike.%${q}%`)
+        .order('nama')
+        .limit(15);
+      if (error) {
+        console.error(error);
+        div.innerHTML = '<div class="search-item">Gagal mencari</div>';
+        div.style.display = 'block';
+        return;
+      }
+      if (!data || data.length === 0) {
+        div.innerHTML = '<div class="search-item">Tidak ditemukan</div>';
+        div.style.display = 'block';
+        return;
+      }
+      div.innerHTML = data.map(p => `
+        <div class="search-item" data-barcode="${p.barcode}">
+          ${p.foto ? `<img src="${p.foto}" class="search-item-img">` : '<div class="search-item-img" style="background:#e0e0e0;display:flex;align-items:center;justify-content:center;">📦</div>'}
+          <div><strong>${p.nama}</strong><br><small>${p.barcode} | Stok:${p.stok} | Rp${(p.harga_jual||0).toLocaleString('id')}</small></div>
+        </div>
+      `).join('');
+      div.style.display = 'block';
+      // Event klik hasil pencarian
+      div.querySelectorAll('.search-item[data-barcode]').forEach(item => {
+        item.onclick = () => {
+          div.style.display = 'none';
+          document.getElementById('searchProduct').value = '';
+          tambahProdukKeCart(item.dataset.barcode);
+        };
+      });
+    } catch (err) {
+      console.error(err);
+      div.innerHTML = '<div class="search-item">Terjadi kesalahan</div>';
+      div.style.display = 'block';
+    }
+  }, 300);
+}
+
+// Sembunyikan hasil pencarian saat klik di luar
+document.addEventListener('click', e => {
+  const s = document.getElementById('searchProduct');
+  const r = document.getElementById('searchResults');
+  if (s && r && e.target !== s && !r.contains(e.target)) {
+    r.style.display = 'none';
+  }
+});
+
+// ========== TAMBAH PRODUK DARI SCAN / KODE ==========
 async function tambahProdukDariScan(barcode) {
   let clean = barcode.replace(/[^a-zA-Z0-9\-_]/g, '');
   if (!clean) return;
@@ -60,16 +129,23 @@ async function tambahProdukDariScan(barcode) {
     if (existing.qty < product.stok) existing.qty++;
     else { alert('Stok tidak mencukupi'); return; }
   } else {
-    cart.push({ barcode: product.barcode, nama: product.nama, harga: product.harga_jual || 0, qty: 1, stok: product.stok || 0, diskon: 0 });
+    cart.push({
+      barcode: product.barcode,
+      nama: product.nama,
+      harga: product.harga_jual || 0,
+      qty: 1,
+      stok: product.stok || 0,
+      diskon: 0
+    });
   }
   renderCart();
 }
 
-function searchProductFn(query) { /* ... sama ... */ }
-document.addEventListener('click', e => { /* ... sama ... */ });
-function tambahProdukKeCart(barcode) { tambahProdukDariScan(barcode); }
+function tambahProdukKeCart(barcode) {
+  tambahProdukDariScan(barcode);
+}
 
-// --- Diskon Per Item (hanya jika fitur aktif) ---
+// ========== DISKON PER ITEM ==========
 function editDiskonItem(index) {
   if (!appSettings.diskon_item_enabled) {
     alert('Fitur diskon per item tidak diaktifkan.');
@@ -93,12 +169,12 @@ function editDiskonItem(index) {
   renderCart();
 }
 
-// ===================== RENDER CART + AREA DISKON TOTAL =====================
+// ========== RENDER CART + AREA DISKON TOTAL ==========
 function renderCart() {
   const tbody = document.querySelector('#cartTable tbody');
   tbody.innerHTML = '';
 
-  let subtotalItemNetto = 0; // Subtotal1 = total setelah diskon per item
+  let subtotalItemNetto = 0;
   cart.forEach((item, idx) => {
     const sub = item.harga * item.qty;
     const diskon = item.diskon || 0;
@@ -128,7 +204,6 @@ function renderCart() {
     `;
   });
 
-  // Container untuk total dan diskon
   let container = document.getElementById('diskonContainer');
   if (!container) {
     container = document.createElement('div');
@@ -138,7 +213,6 @@ function renderCart() {
   }
 
   if (appSettings.diskon_total_enabled) {
-    // Tampilkan SUBTOTAL1, input diskon, TOTAL (Subtotal2)
     container.innerHTML = `
       <div style="margin-top:12px; text-align:right; font-size:14px;">
         <div><strong>SUBTOTAL: Rp<span id="subtotal1Display">${subtotalItemNetto.toLocaleString('id')}</span></strong></div>
@@ -156,7 +230,6 @@ function renderCart() {
       </div>
     `;
   } else {
-    // Tanpa diskon total, cukup tampilkan total akhir
     container.innerHTML = `
       <div style="margin-top:12px; text-align:right; font-size:16px; font-weight:bold;">
         TOTAL: Rp<span id="totalCart">${subtotalItemNetto.toLocaleString('id')}</span>
@@ -164,7 +237,6 @@ function renderCart() {
     `;
   }
 
-  // Update perhitungan total
   updateTotalDariDiskon();
 }
 
@@ -185,7 +257,6 @@ function updateTotalDariDiskon() {
   hitungKembalian();
 }
 
-// --- Qty & Hapus ---
 function changeQty(i, d) {
   let q = cart[i].qty + d;
   if (q < 1) q = 1;
@@ -208,27 +279,23 @@ function hitungKembalian() {
   document.getElementById('kembalian').textContent = Math.max(0, b - t).toLocaleString('id');
 }
 
-// ===================== BAYAR & CETAK =====================
+// ========== BAYAR & CETAK ==========
 async function bayarDanCetak() {
   if (!cart.length) { alert('Keranjang kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
 
-  // Hitung subtotal1 (setelah diskon per item)
   const subtotal1 = cart.reduce((sum, item) => sum + (item.harga * item.qty) - (item.diskon || 0), 0);
-  // Diskon total dari input (jika fitur aktif)
   let totalDiskon = 0;
   if (appSettings.diskon_total_enabled) {
     totalDiskon = parseInt(document.getElementById('inputDiskon')?.value) || 0;
     if (totalDiskon > subtotal1) totalDiskon = subtotal1;
   }
-  const grandTotal = subtotal1 - totalDiskon; // Subtotal2 = Grand Total
+  const grandTotal = subtotal1 - totalDiskon;
 
   const totalEl = document.getElementById('totalCart');
   if (!totalEl) return alert('Total tidak ditemukan');
   const totalDisplay = parseInt(totalEl.textContent.replace(/\D/g, '')) || 0;
-  // Pastikan konsisten
   if (totalDisplay !== grandTotal) {
-    // Update tampilan jika belum sinkron
     totalEl.textContent = grandTotal.toLocaleString('id');
   }
 
@@ -248,7 +315,6 @@ async function bayarDanCetak() {
     netto: (i.harga * i.qty) - (i.diskon || 0)
   }));
 
-  // Objek transaksi
   const trx = {
     no_invoice: no,
     tanggal: now.toISOString(),
@@ -259,19 +325,15 @@ async function bayarDanCetak() {
     kembali
   };
 
-  // Hanya tambahkan totalDiskon jika kolom ada
   try {
     const { data: colCheck, error: colError } = await supabaseClient
       .from('transactions')
       .select('totalDiskon')
       .limit(1);
-    if (!colError) {
-      trx.totalDiskon = totalDiskon;
-    }
+    if (!colError) trx.totalDiskon = totalDiskon;
   } catch (e) {}
 
   try {
-    // Update stok
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -280,7 +342,6 @@ async function bayarDanCetak() {
     }
     await insertTransaction(trx);
 
-    // ---------- CETAK STRUK ----------
     const toko = await getSettings();
     const lebarKertas = parseInt(toko.kertas_lebar) || 80;
     const marginKiri = 3, marginKanan = 3;
@@ -310,11 +371,9 @@ async function bayarDanCetak() {
     doc.text('Tanggal: ' + now.toLocaleString('id-ID'), marginKiri, y); y += 5;
     doc.text('Customer: ' + (cust || '-'), marginKiri, y); y += 8;
 
-    // Header tabel
     doc.text('Item', xItem, y); doc.text('Qty', xQty, y, { align: 'center' }); doc.text('Harga', xHarga, y, { align: 'right' }); doc.text('Subtotal', xSubtotal, y, { align: 'right' });
     y += 4; doc.line(marginKiri, y, xSubtotal, y); y += 3;
 
-    // Daftar item
     cart.forEach(i => {
       const sub = i.harga * i.qty;
       doc.text(i.nama, xItem, y, { maxWidth: xQty - xItem - 2 });
@@ -330,28 +389,19 @@ async function bayarDanCetak() {
       y += 5;
     });
 
-    // Garis pemisah
     doc.line(marginKiri, y, xSubtotal, y); y += 4;
-
-    // --- RINCIAN DISKON & TOTAL ---
-    // Subtotal1
     doc.text('Subtotal:', xItem, y);
     doc.text('Rp' + subtotal1.toLocaleString('id'), xSubtotal, y, { align: 'right' });
     y += 5;
-
-    // Diskon total (jika ada)
     if (totalDiskon > 0) {
       doc.text('Diskon:', xItem, y);
       doc.text('-Rp' + totalDiskon.toLocaleString('id'), xSubtotal, y, { align: 'right' });
       y += 5;
     }
-
-    // Grand Total
     doc.setFontSize(9);
     doc.text('TOTAL:', xItem, y);
     doc.text('Rp' + grandTotal.toLocaleString('id'), xSubtotal, y, { align: 'right' });
     y += 6;
-
     doc.setFontSize(8);
     doc.text('Bayar:', xItem, y);
     doc.text('Rp' + bayar.toLocaleString('id'), xSubtotal, y, { align: 'right' });
@@ -359,7 +409,6 @@ async function bayarDanCetak() {
     doc.text('Kembali:', xItem, y);
     doc.text('Rp' + kembali.toLocaleString('id'), xSubtotal, y, { align: 'right' });
     y += 5;
-
     if (toko.footer) {
       doc.setFontSize(7);
       doc.text(toko.footer, lebarKertas / 2, y, { align: 'center' });
@@ -376,7 +425,6 @@ async function bayarDanCetak() {
       } catch (e) {}
     }
 
-    // Cetak Bluetooth (struk teks)
     if (bluetoothDevice && bluetoothCharacteristic) {
       const teksStruk = buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust);
       await cetakStrukKePrinter(toko.logo || null, teksStruk);
@@ -390,7 +438,6 @@ async function bayarDanCetak() {
       }, 500);
     }
 
-    // Reset
     cart = [];
     if (appSettings.diskon_total_enabled) {
       document.getElementById('inputDiskon').value = '0';
@@ -406,7 +453,6 @@ async function bayarDanCetak() {
   }
 }
 
-// --- Fungsi bantu struk teks untuk Bluetooth ---
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
   let teks = '';
   teks += toko.nama + '\n';
