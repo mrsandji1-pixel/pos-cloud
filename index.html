@@ -43,12 +43,11 @@
       <thead><tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
-    
-    <div class="form-group">
-      <label>Pembayaran</label>
-      <div class="nominal-grid" id="nominalButtons"></div>
-      <input type="number" id="bayar" placeholder="Uang dibayar" oninput="hitungKembalian()" value="0">
-      <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
+    <div class="form-group" id="pembayaranGroup">
+  <label>Pembayaran</label>
+    <div class="nominal-grid" id="nominalButtons"></div>
+     <input type="number" id="bayar" placeholder="Uang dibayar" oninput="hitungKembalian()" value="0">
+     <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
     </div>
     <div>Kembalian: Rp <span id="kembalian">0</span></div>
     <div id="printerStatusTrans" class="printer-status" style="margin-top:8px;">
