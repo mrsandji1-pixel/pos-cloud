@@ -1,10 +1,10 @@
-// ===================== TRANSAKSI.JS (Rapi: Admin Diskon, Pop-up Tunai) =====================
+// ===================== TRANSAKSI.JS (Lengkap - Layout Pembayaran Baru) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
 let isAdmin = false;
 let totalDiskonValue = 0;
-let bayarValue = 0;   // nilai pembayaran TUNAI (default 0)
+let bayarValue = 0;   // total pembayaran yang terkumpul
 
 async function setupTransaksi() {
   isAdmin = (currentUser && currentUser.role === 'admin');
@@ -12,26 +12,35 @@ async function setupTransaksi() {
   try {
     appSettings = await getSettings();
   } catch (e) {
+    console.warn('Gagal ambil settings, gunakan default:', e);
     appSettings = { diskon_item_enabled: true, diskon_total_enabled: true };
   }
 
-  // Hapus total-box statis (jika masih ada)
+  // Hapus total-box statis
   const staticTotalBox = document.querySelector('#page-transaksi .total-box');
   if (staticTotalBox) staticTotalBox.remove();
   document.querySelectorAll('#totalCart').forEach(el => el.remove());
 
-  // ---- PERUBAHAN AREA PEMBAYARAN ----
+  // ===== AREA PEMBAYARAN BARU =====
   const pembayaranGroup = document.getElementById('pembayaranGroup');
   if (pembayaranGroup) {
     pembayaranGroup.innerHTML = `
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
-        <strong style="font-size:16px;">PEMBAYARAN</strong>
-        <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI: Rp <span id="tunaiDisplay">0</span></button>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div>
+          <strong style="font-size:16px;">PEMBAYARAN:</strong>
+          <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI</button>
+          <!-- Tombol metode lain (KARTU KREDIT, dll) bisa ditambahkan di sini -->
+        </div>
+        <div style="font-size:16px; font-weight:bold;">
+          BAYAR: Rp <span id="bayarDisplay">0</span>
+        </div>
       </div>
     `;
   }
-  bayarValue = 0; // reset saat setup
-  // Hapus juga nominalButtons jika masih ada di luar (tidak diperlukan)
+  bayarValue = 0;
+  updateBayarDisplay();
+
+  // Hapus elemen nominalButtons jika masih ada
   const oldNominal = document.getElementById('nominalButtons');
   if (oldNominal) oldNominal.remove();
 
@@ -59,9 +68,14 @@ async function setupTransaksi() {
   renderCart();
 }
 
+function updateBayarDisplay() {
+  const display = document.getElementById('bayarDisplay');
+  if (display) display.textContent = bayarValue.toLocaleString('id');
+  hitungKembalian();
+}
+
 // ========== POP-UP PEMBAYARAN TUNAI ==========
 function bukaPopupTunai() {
-  // Buat modal pop-up
   const modal = document.createElement('div');
   modal.id = 'popupTunaiModal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
@@ -84,31 +98,25 @@ function bukaPopupTunai() {
 
   document.getElementById('btnSimpanTunai').onclick = () => {
     const nilai = parseInt(document.getElementById('inputBayarPopup').value) || 0;
-    if (nilai < 0) {
-      alert('Nilai tidak boleh negatif');
-      return;
-    }
+    if (nilai < 0) { alert('Nilai tidak boleh negatif'); return; }
     bayarValue = nilai;
-    document.getElementById('tunaiDisplay').textContent = bayarValue.toLocaleString('id');
+    updateBayarDisplay();
     document.body.removeChild(modal);
-    hitungKembalian();
   };
 
   document.getElementById('btnBatalTunai').onclick = () => {
     document.body.removeChild(modal);
   };
 
-  // Fokus ke input
   setTimeout(() => document.getElementById('inputBayarPopup').focus(), 100);
 }
 
-// Fungsi tambah nominal dari pop-up
 function tambahNominalPopup(nominal) {
   const input = document.getElementById('inputBayarPopup');
   input.value = (parseInt(input.value) || 0) + nominal;
 }
 
-// ========== PENCARIAN & TAMBAH PRODUK (TIDAK BERUBAH) ==========
+// ========== PENCARIAN PRODUK ==========
 function searchProductFn(query) {
   clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
@@ -166,6 +174,7 @@ document.addEventListener('click', e => {
   }
 });
 
+// ========== TAMBAH PRODUK ==========
 async function tambahProdukDariScan(barcode) {
   let clean = barcode.replace(/[^a-zA-Z0-9\-_]/g, '');
   if (!clean) return;
@@ -187,7 +196,7 @@ async function tambahProdukDariScan(barcode) {
 }
 function tambahProdukKeCart(barcode) { tambahProdukDariScan(barcode); }
 
-// ========== DISKON PER ITEM ==========
+// ========== DISKON PER ITEM (hanya admin) ==========
 function editDiskonItem(index) {
   if (!isAdmin) { alert('Hanya admin yang dapat mengubah diskon.'); return; }
   if (appSettings.diskon_item_enabled === false) { alert('Fitur diskon per item dinonaktifkan.'); return; }
@@ -209,7 +218,7 @@ function editDiskonItem(index) {
   renderCart();
 }
 
-// ========== POP-UP DISKON TOTAL ==========
+// ========== POP-UP DISKON TOTAL (admin) ==========
 function bukaPopupDiskonTotal() {
   if (!isAdmin) return;
   if (appSettings.diskon_total_enabled === false) {
@@ -323,6 +332,7 @@ function renderCart() {
   hitungKembalian();
 }
 
+// ========== QUANTITY & HAPUS ==========
 function changeQty(i, d) { let q = cart[i].qty + d; if (q < 1) q = 1; if (q > cart[i].stok) { alert('Stok tidak cukup'); q = cart[i].stok; } cart[i].qty = q; renderCart(); }
 function updateQty(i, q) { q = parseInt(q) || 1; if (q > cart[i].stok) { alert('Stok tidak cukup'); q = cart[i].stok; } cart[i].qty = q; renderCart(); }
 function hapusCartItem(i) { cart.splice(i, 1); renderCart(); }
@@ -465,7 +475,7 @@ async function bayarDanCetak() {
     cart = [];
     totalDiskonValue = 0;
     bayarValue = 0;
-    document.getElementById('tunaiDisplay').textContent = '0';
+    updateBayarDisplay();
     renderCart();
     document.getElementById('custName').value = '';
     hitungKembalian();
@@ -475,6 +485,7 @@ async function bayarDanCetak() {
   }
 }
 
+// ========== FUNGSI STRUK TEKS ==========
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
   let teks = '';
   teks += (toko.nama || 'TOKO') + '\n';
