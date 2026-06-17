@@ -513,3 +513,14 @@ input:disabled, select:disabled, textarea:disabled {
     font-size: 20px;
   }
 }
+.nominal-btn-popup {
+  padding: 8px 4px;
+  font-size: 13px;
+  background: #f1f8e9;
+  border: 1px solid #c8e6c9;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.nominal-btn-popup:hover {
+  background: #dcedc8;
+}
