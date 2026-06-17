@@ -1,38 +1,39 @@
-// ===================== TRANSAKSI.JS (Admin Diskon, Pop-up Diskon Total) =====================
+// ===================== TRANSAKSI.JS (Rapi: Admin Diskon, Pop-up Tunai) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
-let isAdmin = false;           // akan di-set saat setup
-let totalDiskonValue = 0;      // diskon total dalam rupiah (diisi via pop-up)
+let isAdmin = false;
+let totalDiskonValue = 0;
+let bayarValue = 0;   // nilai pembayaran TUNAI (default 0)
 
 async function setupTransaksi() {
-  // Cek role admin
   isAdmin = (currentUser && currentUser.role === 'admin');
 
-  // Ambil pengaturan (opsional, jika masih ingin kontrol enable/disable via setting)
   try {
     appSettings = await getSettings();
   } catch (e) {
-    console.warn('Gagal ambil settings, gunakan default:', e);
     appSettings = { diskon_item_enabled: true, diskon_total_enabled: true };
   }
 
-  // Hapus semua elemen totalCart statis
+  // Hapus total-box statis (jika masih ada)
+  const staticTotalBox = document.querySelector('#page-transaksi .total-box');
+  if (staticTotalBox) staticTotalBox.remove();
   document.querySelectorAll('#totalCart').forEach(el => el.remove());
 
-  // Tombol nominal cepat
-  const nominalDiv = document.getElementById('nominalButtons');
-  nominalDiv.innerHTML = '';
-  [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200].forEach(n => {
-    const btn = document.createElement('button');
-    btn.className = 'nominal-btn';
-    btn.textContent = 'Rp ' + n.toLocaleString('id');
-    btn.onclick = () => {
-      document.getElementById('bayar').value = (parseInt(document.getElementById('bayar').value) || 0) + n;
-      hitungKembalian();
-    };
-    nominalDiv.appendChild(btn);
-  });
+  // ---- PERUBAHAN AREA PEMBAYARAN ----
+  const pembayaranGroup = document.getElementById('pembayaranGroup');
+  if (pembayaranGroup) {
+    pembayaranGroup.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <strong style="font-size:16px;">PEMBAYARAN</strong>
+        <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI: Rp <span id="tunaiDisplay">0</span></button>
+      </div>
+    `;
+  }
+  bayarValue = 0; // reset saat setup
+  // Hapus juga nominalButtons jika masih ada di luar (tidak diperlukan)
+  const oldNominal = document.getElementById('nominalButtons');
+  if (oldNominal) oldNominal.remove();
 
   // Scan barcode
   document.getElementById('scanInputTrans').onkeydown = e => {
@@ -54,13 +55,60 @@ async function setupTransaksi() {
     };
   }
 
-  // Pastikan totalDiskonValue di-reset saat halaman dimuat
   totalDiskonValue = 0;
-
   renderCart();
 }
 
-// ========== PENCARIAN PRODUK ==========
+// ========== POP-UP PEMBAYARAN TUNAI ==========
+function bukaPopupTunai() {
+  // Buat modal pop-up
+  const modal = document.createElement('div');
+  modal.id = 'popupTunaiModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:8px;width:300px;text-align:center;">
+      <h3>Pembayaran Tunai</h3>
+      <div id="popupNominalGrid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
+        ${[100000,50000,20000,10000,5000,2000,1000,500,200].map(n => 
+          `<button class="nominal-btn-popup" onclick="tambahNominalPopup(${n})">Rp ${n.toLocaleString('id')}</button>`
+        ).join('')}
+      </div>
+      <input type="number" id="inputBayarPopup" value="${bayarValue}" placeholder="0" style="width:100%;padding:8px;box-sizing:border-box;text-align:right;" onfocus="this.select()">
+      <div style="margin-top:10px;">
+        <button id="btnSimpanTunai" class="btn-sm">Simpan</button>
+        <button id="btnBatalTunai" class="btn-sm btn-danger">Batal</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('btnSimpanTunai').onclick = () => {
+    const nilai = parseInt(document.getElementById('inputBayarPopup').value) || 0;
+    if (nilai < 0) {
+      alert('Nilai tidak boleh negatif');
+      return;
+    }
+    bayarValue = nilai;
+    document.getElementById('tunaiDisplay').textContent = bayarValue.toLocaleString('id');
+    document.body.removeChild(modal);
+    hitungKembalian();
+  };
+
+  document.getElementById('btnBatalTunai').onclick = () => {
+    document.body.removeChild(modal);
+  };
+
+  // Fokus ke input
+  setTimeout(() => document.getElementById('inputBayarPopup').focus(), 100);
+}
+
+// Fungsi tambah nominal dari pop-up
+function tambahNominalPopup(nominal) {
+  const input = document.getElementById('inputBayarPopup');
+  input.value = (parseInt(input.value) || 0) + nominal;
+}
+
+// ========== PENCARIAN & TAMBAH PRODUK (TIDAK BERUBAH) ==========
 function searchProductFn(query) {
   clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
@@ -118,7 +166,6 @@ document.addEventListener('click', e => {
   }
 });
 
-// ========== TAMBAH PRODUK ==========
 async function tambahProdukDariScan(barcode) {
   let clean = barcode.replace(/[^a-zA-Z0-9\-_]/g, '');
   if (!clean) return;
@@ -140,16 +187,10 @@ async function tambahProdukDariScan(barcode) {
 }
 function tambahProdukKeCart(barcode) { tambahProdukDariScan(barcode); }
 
-// ========== DISKON PER ITEM (hanya admin) ==========
+// ========== DISKON PER ITEM ==========
 function editDiskonItem(index) {
-  if (!isAdmin) {
-    alert('Hanya admin yang dapat mengubah diskon.');
-    return;
-  }
-  if (appSettings.diskon_item_enabled === false) {
-    alert('Fitur diskon per item dinonaktifkan oleh pengaturan.');
-    return;
-  }
+  if (!isAdmin) { alert('Hanya admin yang dapat mengubah diskon.'); return; }
+  if (appSettings.diskon_item_enabled === false) { alert('Fitur diskon per item dinonaktifkan.'); return; }
   const item = cart[index];
   const diskon = prompt(
     `Diskon untuk ${item.nama} (Rp ${item.harga.toLocaleString('id')})\nMasukkan nilai diskon (akhiri dengan % untuk persen, atau angka untuk nominal):`,
@@ -175,8 +216,6 @@ function bukaPopupDiskonTotal() {
     alert('Fitur diskon total dinonaktifkan oleh pengaturan.');
     return;
   }
-
-  // Buat modal overlay
   const modal = document.createElement('div');
   modal.id = 'popupDiskonModal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
@@ -249,7 +288,6 @@ function renderCart() {
     `;
   });
 
-  // Container untuk total dan diskon
   let container = document.getElementById('diskonContainer');
   if (!container) {
     container = document.createElement('div');
@@ -258,7 +296,6 @@ function renderCart() {
     cartTable.parentNode.insertBefore(container, cartTable.nextSibling);
   }
 
-  // Batasi totalDiskonValue agar tidak melebihi subtotal
   if (totalDiskonValue > subtotalItemNetto) totalDiskonValue = subtotalItemNetto;
   const total = subtotalItemNetto - totalDiskonValue;
 
@@ -276,7 +313,6 @@ function renderCart() {
       </div>
     `;
   } else {
-    // Non-admin atau fitur dimatikan: tampilkan hanya total
     container.innerHTML = `
       <div style="margin-top:12px; text-align:right; font-size:16px; font-weight:bold;">
         TOTAL: Rp<span id="totalCart">${subtotalItemNetto.toLocaleString('id')}</span>
@@ -287,7 +323,6 @@ function renderCart() {
   hitungKembalian();
 }
 
-// ========== QTY & HAPUS ==========
 function changeQty(i, d) { let q = cart[i].qty + d; if (q < 1) q = 1; if (q > cart[i].stok) { alert('Stok tidak cukup'); q = cart[i].stok; } cart[i].qty = q; renderCart(); }
 function updateQty(i, q) { q = parseInt(q) || 1; if (q > cart[i].stok) { alert('Stok tidak cukup'); q = cart[i].stok; } cart[i].qty = q; renderCart(); }
 function hapusCartItem(i) { cart.splice(i, 1); renderCart(); }
@@ -295,8 +330,8 @@ function hapusCartItem(i) { cart.splice(i, 1); renderCart(); }
 function hitungKembalian() {
   const totalTeks = document.getElementById('totalCart')?.textContent || '0';
   const t = parseInt(totalTeks.replace(/\D/g, '')) || 0;
-  const b = parseInt(document.getElementById('bayar').value) || 0;
-  document.getElementById('kembalian').textContent = Math.max(0, b - t).toLocaleString('id');
+  const kembali = Math.max(0, bayarValue - t);
+  document.getElementById('kembalian').textContent = kembali.toLocaleString('id');
 }
 
 // ========== BAYAR & CETAK ==========
@@ -304,19 +339,15 @@ async function bayarDanCetak() {
   if (!cart.length) { alert('Keranjang kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
 
-  // Hitung subtotal1 (setelah diskon per item)
   const subtotal1 = cart.reduce((sum, item) => sum + (item.harga * item.qty) - (item.diskon || 0), 0);
-  // totalDiskonValue sudah dijaga tidak lebih dari subtotal1
   const grandTotal = subtotal1 - totalDiskonValue;
 
   const totalEl = document.getElementById('totalCart');
   if (!totalEl) return alert('Total tidak ditemukan');
-  const totalDisplay = parseInt(totalEl.textContent.replace(/\D/g, '')) || 0;
-  if (totalDisplay !== grandTotal) totalEl.textContent = grandTotal.toLocaleString('id');
+  if (parseInt(totalEl.textContent.replace(/\D/g, '')) !== grandTotal) totalEl.textContent = grandTotal.toLocaleString('id');
 
-  const bayar = parseInt(document.getElementById('bayar').value) || 0;
-  if (bayar < grandTotal) { alert('Pembayaran kurang'); return; }
-  const kembali = bayar - grandTotal;
+  if (bayarValue < grandTotal) { alert('Pembayaran kurang'); return; }
+  const kembali = bayarValue - grandTotal;
   const now = new Date();
   const no = `INV-${now.toISOString().slice(0,10).replace(/-/g,'')}-${now.toTimeString().slice(0,8).replace(/:/g,'')}`;
 
@@ -327,7 +358,7 @@ async function bayarDanCetak() {
 
   const trx = {
     no_invoice: no, tanggal: now.toISOString(), customer: cust, items,
-    total: grandTotal, bayar, kembali
+    total: grandTotal, bayar: bayarValue, kembali
   };
   try {
     const { data: colCheck, error: colError } = await supabaseClient.from('transactions').select('totalDiskon').limit(1);
@@ -401,7 +432,7 @@ async function bayarDanCetak() {
     doc.text('Rp' + grandTotal.toLocaleString('id'), xSubtotal, y, { align: 'right' });
     y += 6;
     doc.setFontSize(8);
-    doc.text('Bayar:', xItem, y); doc.text('Rp' + bayar.toLocaleString('id'), xSubtotal, y, { align: 'right' }); y += 5;
+    doc.text('Bayar:', xItem, y); doc.text('Rp' + bayarValue.toLocaleString('id'), xSubtotal, y, { align: 'right' }); y += 5;
     doc.text('Kembali:', xItem, y); doc.text('Rp' + kembali.toLocaleString('id'), xSubtotal, y, { align: 'right' }); y += 5;
     if (toko.footer) {
       doc.setFontSize(7);
@@ -418,7 +449,7 @@ async function bayarDanCetak() {
     }
 
     if (bluetoothDevice && bluetoothCharacteristic) {
-      const teksStruk = buatStrukTeks(cart, subtotal1, totalDiskonValue, grandTotal, bayar, kembali, toko, no, cust);
+      const teksStruk = buatStrukTeks(cart, subtotal1, totalDiskonValue, grandTotal, bayarValue, kembali, toko, no, cust);
       await cetakStrukKePrinter(toko.logo || null, teksStruk);
     } else {
       const blobUrl = URL.createObjectURL(pdfBlob);
@@ -433,8 +464,9 @@ async function bayarDanCetak() {
     // Reset
     cart = [];
     totalDiskonValue = 0;
+    bayarValue = 0;
+    document.getElementById('tunaiDisplay').textContent = '0';
     renderCart();
-    document.getElementById('bayar').value = '0';
     document.getElementById('custName').value = '';
     hitungKembalian();
     alert(`✅ Berhasil!\nNo: ${no}\nTotal: Rp${grandTotal.toLocaleString('id')}\nKembali: Rp${kembali.toLocaleString('id')}`);
@@ -443,7 +475,6 @@ async function bayarDanCetak() {
   }
 }
 
-// ========== FUNGSI STRUK TEKS (9 parameter) ==========
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
   let teks = '';
   teks += (toko.nama || 'TOKO') + '\n';
@@ -468,4 +499,18 @@ function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali,
   return teks;
 }
 
-function lihatDetailProduk(barcode) { /* ... sama seperti sebelumnya ... */ }
+function lihatDetailProduk(barcode) {
+  (async () => {
+    const p = await getProductByBarcode(barcode);
+    if (!p) return alert('Produk tidak ditemukan');
+    document.getElementById('detailNama').textContent = p.nama || '';
+    document.getElementById('detailBarcode').textContent = p.barcode || '';
+    document.getElementById('detailKategori').textContent = p.kategori || '-';
+    document.getElementById('detailKeterangan').textContent = p.keterangan || '-';
+    document.getElementById('detailHargaJual').textContent = 'Rp' + (p.harga_jual || 0).toLocaleString('id');
+    document.getElementById('detailStok').textContent = p.stok || 0;
+    const img = document.getElementById('detailFoto');
+    if (p.foto) { img.src = p.foto; img.style.display = 'block'; } else img.style.display = 'none';
+    document.getElementById('productDetailModal').style.display = 'flex';
+  })();
+}
