@@ -497,7 +497,7 @@ function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali,
   teks += 'Tanggal: ' + new Date().toLocaleString('id-ID') + '\n';
   teks += 'Customer: ' + (cust || '-') + '\n';
   teks += '------------------------------\n';
-  teks += 'Item           Qty  Harga   Subtotal\n';
+  teks += 'Item           Qty    Harga    Subtotal\n';
   cart.forEach(i => {
     const sub = i.harga * i.qty;
     teks += i.nama.padEnd(15) + i.qty.toString().padStart(3) + '  ' + i.harga.toLocaleString('id').padStart(8) + '  ' + (sub - (i.diskon||0)).toLocaleString('id').padStart(10) + '\n';
