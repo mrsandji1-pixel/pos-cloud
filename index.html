@@ -26,18 +26,21 @@
   <div id="page-transaksi" class="page active">
     <div class="form-group" style="position:relative;">
       <label>Nama Customer (opsional)</label>
-      <input type="text" id="custName" placeholder="Nama Customer">
+      <input type="text" id="custName" placeholder="Nama Customer" maxlength="25" style="max-width: 200px;">
       <button class="clear-btn" onclick="document.getElementById('custName').value=''">✕</button>
     </div>
     <div class="form-group" style="position:relative;">
       <label>Cari Produk</label>
-      <input type="text" id="searchProduct" placeholder="Nama / Barcode..." oninput="searchProductFn(this.value)" onfocus="searchProductFn(this.value)" autocomplete="off" style="font-size:14px; padding:8px;">
+      <input type="text" id="searchProduct" placeholder="Nama / Barcode..." 
+       oninput="searchProductFn(this.value)" onfocus="searchProductFn(this.value)" 
+       autocomplete="off" maxlength="25" style="max-width: 200px;">
       <button class="clear-btn" onclick="document.getElementById('searchProduct').value='';document.getElementById('searchResults').style.display='none';" style="top:28px;">✕</button>
       <div class="search-results" id="searchResults" style="display:none;"></div>
     </div>
     <div class="form-group">
       <label>Scan Barcode</label>
-      <input type="text" id="scanInputTrans" placeholder="Scan barcode di sini..." autocomplete="off" style="font-size:14px; padding:8px;">
+      <input type="text" id="scanInputTrans" placeholder="Scan barcode di sini..." 
+       autocomplete="off" maxlength="25" style="max-width: 200px;">
     </div>
     <table class="cart-table" id="cartTable">
       <thead><tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
