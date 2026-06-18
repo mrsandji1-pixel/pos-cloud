@@ -66,13 +66,15 @@
       <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
     </div>
     <div>Kembalian: Rp <span id="kembalian">0</span></div>
+    
+    <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px; margin-top:8px;">💳 BAYAR & CETAK</button>
+  </div>
+
     <div id="printerStatusTrans" class="printer-status" style="margin-top:8px;">
       <span class="led led-red" id="ledTrans"></span>
       <span id="printerStatusText">Printer tidak terhubung</span>
       <button class="btn btn-sm btn-danger" id="btnPutusTrans" onclick="putusPrinter()" style="display:none;">Putus</button>
     </div>
-    <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px; margin-top:8px;">💳 BAYAR & CETAK</button>
-  </div>
 
   <!-- ================== INVENTORY ================== -->
   <div id="page-inventory" class="page">
