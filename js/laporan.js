@@ -1,4 +1,4 @@
-// ===================== LAPORAN.JS =====================
+// ===================== LAPORAN.JS (Tombol Hapus Hanya Admin) =====================
 let chartInstance = null;
 let topProductsChart = null;
 
@@ -44,8 +44,9 @@ async function muatLaporan() {
       const row = tbody.insertRow();
       row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
         <button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button>
-        <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️</button>
-        <button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>
+        <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️ PDF</button>
+        <button class="btn-sm" onclick="cetakUlangBT('${t.no_invoice}')">🖨️ BT</button>
+        ${(currentUser && currentUser.role === 'admin') ? `<button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>` : ''}
       </td>`;
     });
   }
@@ -55,6 +56,43 @@ async function muatLaporan() {
   renderTopProductsChart(all);
 }
 
+// ========== CETAK ULANG VIA BLUETOOTH (DIPERBAIKI) ==========
+async function cetakUlangBT(noInv) {
+  if (!bluetoothDevice || !bluetoothCharacteristic) {
+    alert('Printer Bluetooth tidak terhubung. Sambungkan dulu di tab Setting.');
+    return;
+  }
+
+  const trx = await getTransaction(noInv);
+  if (!trx) {
+    alert('Transaksi tidak ditemukan');
+    return;
+  }
+
+  const toko = await getSettings();
+  const cart = trx.items || [];
+
+  // Hitung subtotal1 (setelah diskon per item, jika data diskon ada)
+  const subtotal1 = cart.reduce((sum, item) => {
+    const sub = item.harga * item.qty;
+    const diskon = item.diskon || 0;
+    return sum + (sub - diskon);
+  }, 0);
+  // Diskon total (dari transaksi, default 0)
+  const totalDiskon = trx.totalDiskon || 0;
+  // Grand Total = subtotal1 - totalDiskon (seharusnya sama dengan trx.total)
+  const grandTotal = subtotal1 - totalDiskon;
+  // Bayar & Kembali
+  const bayar = trx.bayar || 0;
+  const kembali = trx.kembali || 0;
+
+  // Panggil fungsi buatStrukTeks versi 9 parameter (harus ada di transaksi.js)
+  const teks = buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, trx.no_invoice, trx.customer);
+
+  await cetakStrukKePrinter(toko.logo || null, teks);
+}
+
+// ========== HAPUS TRANSAKSI ==========
 async function hapusTransaksi(noInv) {
   if (!confirm(`Hapus transaksi ${noInv}? Stok akan dikembalikan.`)) return;
   const trx = await getTransaction(noInv);
@@ -67,26 +105,56 @@ async function hapusTransaksi(noInv) {
       }
     }
     await deleteTransaction(noInv);
-    // Hapus file PDF dari storage (abaikan jika tidak ada)
     try { await supabaseClient.storage.from('invoices').remove([`${noInv}.pdf`]); } catch(e) {}
     alert('Transaksi dihapus');
     muatLaporan();
   } catch (e) { alert('Gagal menghapus: ' + e.message); }
 }
 
-// ========== GENERATE PDF DARI DATA TRANSAKSI ==========
+// ========== VIEW & CETAK PDF (FALLBACK) ==========
+async function viewInvoice(noInv) {
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    window.open(url, '_blank');
+    return;
+  }
+  const trx = await getTransaction(noInv);
+  if (!trx) return alert('Transaksi tidak ditemukan');
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama; trx.toko_alamat = toko.alamat; trx.toko_footer = toko.footer;
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank');
+}
+
+async function cetakUlang(noInv) {
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    const pw = window.open(url, '_blank');
+    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+    return;
+  }
+  const trx = await getTransaction(noInv);
+  if (!trx) return alert('Transaksi tidak ditemukan');
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama; trx.toko_alamat = toko.alamat; trx.toko_footer = toko.footer;
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
+  const pw = window.open(blobUrl, '_blank');
+  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+}
+
+// ========== GENERATE PDF DARI DATA TRANSAKSI (sama seperti sebelumnya) ==========
 function generateInvoicePDF(trx) {
   const { jsPDF } = window.jspdf;
   const lebarKertas = 80;
   const marginKiri = 3, marginKanan = 3;
-  const areaCetak = lebarKertas - marginKiri - marginKanan;
   const xItem = marginKiri, xQty = lebarKertas * 0.4, xHarga = lebarKertas * 0.65, xSubtotal = lebarKertas - marginKanan;
   let tinggiHeader = 28;
   const tinggiItem = (trx.items || []).length * 5;
   const tinggiTotalBayar = 15;
   const tinggiFooter = trx.toko_footer ? 12 : 0;
-  const marginBawah = 10;
-  const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + marginBawah;
+  const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + 10;
 
   const doc = new jsPDF({ unit: 'mm', format: [lebarKertas, tinggiTotal] });
   let y = 8;
@@ -107,10 +175,17 @@ function generateInvoicePDF(trx) {
   y += 4; doc.line(marginKiri, y, xSubtotal, y); y += 3;
 
   (trx.items || []).forEach(item => {
+    const netto = (item.harga * item.qty) - (item.diskon || 0);
     doc.text(item.nama, xItem, y, { maxWidth: xQty - xItem - 2 });
     doc.text(item.qty.toString(), xQty, y, { align: 'center' });
     doc.text('Rp' + item.harga.toLocaleString('id'), xHarga, y, { align: 'right' });
-    doc.text('Rp' + (item.harga * item.qty).toLocaleString('id'), xSubtotal, y, { align: 'right' });
+    doc.text('Rp' + netto.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+    if (item.diskon) {
+      y += 4;
+      doc.setFontSize(6);
+      doc.text('  Diskon item: -Rp' + item.diskon.toLocaleString('id'), xItem + 5, y);
+      doc.setFontSize(7);
+    }
     y += 5;
   });
   doc.line(marginKiri, y, xSubtotal, y); y += 4;
@@ -127,52 +202,10 @@ function generateInvoicePDF(trx) {
 
   if (trx.toko_footer) {
     doc.setFontSize(7);
-    doc.text(trx.toko_footer, lebarKertas / 2, y, { align: 'center', maxWidth: areaCetak });
+    doc.text(trx.toko_footer, lebarKertas / 2, y, { align: 'center' });
   }
 
   return doc.output('blob');
-}
-
-// ========== VIEW INVOICE (FALLBACK GENERATE) ==========
-async function viewInvoice(noInv) {
-  // Coba ambil dari storage
-  const url = await getInvoiceURL(noInv);
-  if (url) {
-    window.open(url, '_blank');
-    return;
-  }
-
-  // Kalau tidak ada, generate dari transaksi
-  const trx = await getTransaction(noInv);
-  if (!trx) return alert('Transaksi tidak ditemukan');
-  const toko = await getSettings();
-  trx.toko_nama = toko.nama;
-  trx.toko_alamat = toko.alamat;
-  trx.toko_footer = toko.footer;
-  const blob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(blob);
-  window.open(blobUrl, '_blank');
-}
-
-// ========== CETAK ULANG (FALLBACK GENERATE) ==========
-async function cetakUlang(noInv) {
-  const url = await getInvoiceURL(noInv);
-  if (url) {
-    const pw = window.open(url, '_blank');
-    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-    return;
-  }
-
-  const trx = await getTransaction(noInv);
-  if (!trx) return alert('Transaksi tidak ditemukan');
-  const toko = await getSettings();
-  trx.toko_nama = toko.nama;
-  trx.toko_alamat = toko.alamat;
-  trx.toko_footer = toko.footer;
-  const blob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(blob);
-  const pw = window.open(blobUrl, '_blank');
-  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
 }
 
 // ========== CHART ==========

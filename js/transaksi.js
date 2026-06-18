@@ -389,6 +389,7 @@ async function bayarDanCetak() {
         if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
       }, 500);
     }
+  });
 
     // Reset
     cart = [];
