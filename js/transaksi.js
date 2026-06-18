@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Layout Final: Kembalian Kanan, Diskon Lagi Kiri) =====================
+// ===================== TRANSAKSI.JS (Final - Box Ringkasan) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -16,40 +16,47 @@ async function setupTransaksi() {
     appSettings = { diskon_item_enabled: true, diskon_total_enabled: true };
   }
 
-  // Hapus total-box statis
+  // Hapus elemen statis yang tidak diperlukan
   const staticTotalBox = document.querySelector('#page-transaksi .total-box');
   if (staticTotalBox) staticTotalBox.remove();
   document.querySelectorAll('#totalCart').forEach(el => el.remove());
 
-  // ===== AREA PEMBAYARAN + KEMBALIAN =====
-  const pembayaranGroup = document.getElementById('pembayaranGroup');
-  if (pembayaranGroup) {
-    pembayaranGroup.innerHTML = `
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:4px;">
-        <div>
-          <strong style="font-size:16px;">PEMBAYARAN:</strong>
-          <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI</button>
-          <!-- Metode lain bisa ditambahkan di sini -->
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:16px; font-weight:bold;">BAYAR: Rp <span id="bayarDisplay">0</span></div>
-          <div style="font-weight:bold;">Kembalian: Rp <span id="kembalianDisplay">0</span></div>
-        </div>
-      </div>
-    `;
-  }
-  bayarValue = 0;
-  updateBayarDisplay();
-
-  // Hapus elemen kembalian bawaan HTML (jika masih ada)
+  // Sembunyikan area pembayaran lama dan kembalian lama
+  const oldPembayaranGroup = document.getElementById('pembayaranGroup');
+  if (oldPembayaranGroup) oldPembayaranGroup.style.display = 'none';
   const oldKembalian = document.querySelector('#page-transaksi #kembalian');
   if (oldKembalian && oldKembalian.parentElement) {
     oldKembalian.parentElement.style.display = 'none';
   }
-
-  // Hapus nominalButtons lama
   const oldNominal = document.getElementById('nominalButtons');
   if (oldNominal) oldNominal.remove();
+
+  // Buat container ringkasan di bawah cartTable
+  let summaryContainer = document.getElementById('summaryContainer');
+  if (!summaryContainer) {
+    summaryContainer = document.createElement('div');
+    summaryContainer.id = 'summaryContainer';
+    summaryContainer.style.cssText = 'background: #f0f4f8; padding: 12px; border-radius: 8px; margin-top: 8px;';
+    const cartTable = document.getElementById('cartTable');
+    cartTable.parentNode.insertBefore(summaryContainer, cartTable.nextSibling);
+  }
+  // Isi struktur summaryContainer (sekali)
+  summaryContainer.innerHTML = `
+    <div id="diskonContainer"></div>
+    <div id="pembayaranSummary" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #d0d8e0; padding-top:8px;">
+      <div>
+        <strong style="font-size:16px;">PEMBAYARAN:</strong>
+        <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI</button>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-weight:bold;">BAYAR: Rp <span id="bayarDisplay">0</span></div>
+        <div style="font-weight:bold;">Kembalian: Rp <span id="kembalianDisplay">0</span></div>
+      </div>
+    </div>
+  `;
+
+  bayarValue = 0;
+  updateBayarDisplay();
 
   // Scan barcode
   document.getElementById('scanInputTrans').onkeydown = e => {
@@ -81,7 +88,7 @@ function updateBayarDisplay() {
   hitungKembalian();
 }
 
-// ========== POP-UP PEMBAYARAN TUNAI ==========
+// ========== POP-UP TUNAI (TIDAK BERUBAH) ==========
 function bukaPopupTunai() {
   const modal = document.createElement('div');
   modal.id = 'popupTunaiModal';
@@ -123,11 +130,14 @@ function tambahNominalPopup(nominal) {
   input.value = (parseInt(input.value) || 0) + nominal;
 }
 
-// ========== PENCARIAN & TAMBAH PRODUK (TIDAK BERUBAH) ==========
+// ========== PENCARIAN & TAMBAH PRODUK ==========
 function searchProductFn(query) {
   clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
-  if (!query || query.length < 2) { div.style.display = 'none'; return; }
+  if (!query || query.length < 2) {
+    div.style.display = 'none';
+    return;
+  }
   searchTimer = setTimeout(async () => {
     const q = query.trim();
     try {
@@ -137,8 +147,17 @@ function searchProductFn(query) {
         .or(`nama.ilike.%${q}%,barcode.ilike.%${q}%,kategori.ilike.%${q}%`)
         .order('nama')
         .limit(15);
-      if (error) { div.innerHTML = '<div class="search-item">Gagal mencari</div>'; div.style.display = 'block'; return; }
-      if (!data || data.length === 0) { div.innerHTML = '<div class="search-item">Tidak ditemukan</div>'; div.style.display = 'block'; return; }
+      if (error) {
+        console.error(error);
+        div.innerHTML = '<div class="search-item">Gagal mencari</div>';
+        div.style.display = 'block';
+        return;
+      }
+      if (!data || data.length === 0) {
+        div.innerHTML = '<div class="search-item">Tidak ditemukan</div>';
+        div.style.display = 'block';
+        return;
+      }
       div.innerHTML = data.map(p => `
         <div class="search-item" data-barcode="${p.barcode}">
           ${p.foto ? `<img src="${p.foto}" class="search-item-img">` : '<div class="search-item-img" style="background:#e0e0e0;">📦</div>'}
@@ -153,13 +172,19 @@ function searchProductFn(query) {
           tambahProdukKeCart(item.dataset.barcode);
         };
       });
-    } catch (err) { div.innerHTML = '<div class="search-item">Terjadi kesalahan</div>'; div.style.display = 'block'; }
+    } catch (err) {
+      console.error(err);
+      div.innerHTML = '<div class="search-item">Terjadi kesalahan</div>';
+      div.style.display = 'block';
+    }
   }, 300);
 }
 
 document.addEventListener('click', e => {
   const s = document.getElementById('searchProduct'), r = document.getElementById('searchResults');
-  if (s && r && e.target !== s && !r.contains(e.target)) r.style.display = 'none';
+  if (s && r && e.target !== s && !r.contains(e.target)) {
+    r.style.display = 'none';
+  }
 });
 
 async function tambahProdukDariScan(barcode) {
@@ -183,7 +208,7 @@ async function tambahProdukDariScan(barcode) {
 }
 function tambahProdukKeCart(barcode) { tambahProdukDariScan(barcode); }
 
-// ========== DISKON PER ITEM (admin) ==========
+// ========== DISKON PER ITEM ==========
 function editDiskonItem(index) {
   if (!isAdmin) { alert('Hanya admin yang dapat mengubah diskon.'); return; }
   if (appSettings.diskon_item_enabled === false) { alert('Fitur diskon per item dinonaktifkan.'); return; }
@@ -202,7 +227,7 @@ function editDiskonItem(index) {
   renderCart();
 }
 
-// ========== POP-UP DISKON TOTAL (admin) ==========
+// ========== POP-UP DISKON TOTAL ==========
 function bukaPopupDiskonTotal() {
   if (!isAdmin) return;
   if (appSettings.diskon_total_enabled === false) {
@@ -243,7 +268,7 @@ function bukaPopupDiskonTotal() {
   document.getElementById('btnBatalDiskon').onclick = () => document.body.removeChild(modal);
 }
 
-// ========== RENDER CART (dengan layout Diskon Lagi) ==========
+// ========== RENDER CART (DENGAN BOX RINGKASAN) ==========
 function renderCart() {
   const tbody = document.querySelector('#cartTable tbody');
   tbody.innerHTML = '';
@@ -278,34 +303,29 @@ function renderCart() {
     `;
   });
 
-  let container = document.getElementById('diskonContainer');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'diskonContainer';
-    const cartTable = document.getElementById('cartTable');
-    cartTable.parentNode.insertBefore(container, cartTable.nextSibling);
-  }
+  // Update ringkasan (di dalam summaryContainer)
+  const diskonContainer = document.getElementById('diskonContainer');
+  if (!diskonContainer) return;
 
   if (totalDiskonValue > subtotalItemNetto) totalDiskonValue = subtotalItemNetto;
   const total = subtotalItemNetto - totalDiskonValue;
 
-  // Area diskon & total
   if (isAdmin && appSettings.diskon_total_enabled !== false) {
-    container.innerHTML = `
-      <div style="margin-top:12px; font-size:14px;">
-        <div style="text-align:right;"><strong>SUBTOTAL: Rp<span id="subtotal1Display">${subtotalItemNetto.toLocaleString('id')}</span></strong></div>
+    diskonContainer.innerHTML = `
+      <div style="text-align:right; font-size:14px;">
+        <div><strong>SUBTOTAL: Rp<span id="subtotal1Display">${subtotalItemNetto.toLocaleString('id')}</span></strong></div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <button class="btn-sm" style="background:#ff9800; color:white; border:none; font-weight:bold;" onclick="bukaPopupDiskonTotal()">💲 Diskon Lagi</button>
           ${totalDiskonValue > 0 ? `<span style="color:#e53935; font-weight:bold;">-Rp${totalDiskonValue.toLocaleString('id')}</span>` : '<span></span>'}
         </div>
-        <div style="text-align:right; margin-top:6px; font-size:16px; font-weight:bold;">
+        <div style="margin-top:6px; font-size:16px; font-weight:bold;">
           TOTAL: Rp<span id="totalCart">${total.toLocaleString('id')}</span>
         </div>
       </div>
     `;
   } else {
-    container.innerHTML = `
-      <div style="margin-top:12px; text-align:right; font-size:16px; font-weight:bold;">
+    diskonContainer.innerHTML = `
+      <div style="text-align:right; font-size:16px; font-weight:bold;">
         TOTAL: Rp<span id="totalCart">${subtotalItemNetto.toLocaleString('id')}</span>
       </div>
     `;
@@ -327,7 +347,7 @@ function hitungKembalian() {
   if (el) el.textContent = kembali.toLocaleString('id');
 }
 
-// ========== BAYAR & CETAK (tidak banyak berubah) ==========
+// ========== BAYAR & CETAK ==========
 async function bayarDanCetak() {
   if (!cart.length) { alert('Keranjang kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
