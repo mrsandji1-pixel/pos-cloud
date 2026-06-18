@@ -24,13 +24,6 @@ document.querySelectorAll('.tab-btn').forEach(b => {
   });
 });
 
-// Prevent back button
-window.addEventListener('popstate', (e) => {
-  if (confirm('Keluar dari aplikasi?')) { logout(); }
-  else { history.pushState(null, null, location.href); }
-});
-history.pushState(null, null, location.href);
-
 // Check session on load
 function initApp() {
   checkSession();
