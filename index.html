@@ -22,42 +22,48 @@
     <button class="logout-btn" onclick="logout()">Logout</button>
   </div>
 
-  <!-- TRANSAKSI -->
+  <!-- ================== TRANSAKSI ================== -->
   <div id="page-transaksi" class="page active">
+    <!-- Nama Customer -->
     <div class="form-group">
-    <label>Nama Customer (opsional)</label>
-    <div style="position:relative; display:inline-block; width:200px;">
-      <input type="text" id="custName" placeholder="Nama Customer" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
-      <button class="clear-btn" onclick="document.getElementById('custName').value=''" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
-    </div>
-   </div>
-    
-    <div class="form-group">
-    <label>Cari Produk</label>
-    <div style="position:relative; display:inline-block; width:200px;">
-      <input type="text" id="searchProduct" placeholder="Nama / Barcode..." oninput="searchProductFn(this.value)" onfocus="searchProductFn(this.value)" autocomplete="off" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
-      <button class="clear-btn" onclick="document.getElementById('searchProduct').value=''; document.getElementById('searchResults').style.display='none';" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
+      <label>Nama Customer (opsional)</label>
+      <div style="position:relative; display:inline-block; width:200px;">
+        <input type="text" id="custName" placeholder="Nama Customer" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
+        <button class="clear-btn" onclick="document.getElementById('custName').value=''" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
       </div>
     </div>
-    
+
+    <!-- Cari Produk -->
     <div class="form-group">
-    <label>Scan Barcode</label>
-    <div style="position:relative; display:inline-block; width:200px;">
-      <input type="text" id="scanInputTrans" placeholder="Scan barcode di sini..." autocomplete="off" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
-    <!-- tombol X jika diperlukan -->
-      <button class="clear-btn" onclick="document.getElementById('scanInputTrans').value=''" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
-     </div>
-    </div>    
-    
+      <label>Cari Produk</label>
+      <div style="position:relative; display:inline-block; width:200px;">
+        <input type="text" id="searchProduct" placeholder="Nama / Barcode..." oninput="searchProductFn(this.value)" onfocus="searchProductFn(this.value)" autocomplete="off" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
+        <button class="clear-btn" onclick="var s=document.getElementById('searchProduct'); if(s)s.value=''; var sr=document.getElementById('searchResults'); if(sr)sr.style.display='none';" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
+      </div>
+      <!-- PENTING: div untuk hasil pencarian, diletakkan di luar wrapper tetapi masih di dalam form-group -->
+      <div class="search-results" id="searchResults" style="display:none;"></div>
+    </div>
+
+    <!-- Scan Barcode -->
+    <div class="form-group">
+      <label>Scan Barcode</label>
+      <div style="position:relative; display:inline-block; width:200px;">
+        <input type="text" id="scanInputTrans" placeholder="Scan barcode di sini..." autocomplete="off" maxlength="25" style="width:100%; padding-right:25px; box-sizing:border-box;">
+        <button class="clear-btn" onclick="document.getElementById('scanInputTrans').value=''" style="position:absolute; right:0; top:50%; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0 5px;">✕</button>
+      </div>
+    </div>
+
     <table class="cart-table" id="cartTable">
       <thead><tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
+
+    <!-- Area Pembayaran (akan dirombak oleh transaksi.js) -->
     <div class="form-group" id="pembayaranGroup">
-  <label>Pembayaran</label>
-    <div class="nominal-grid" id="nominalButtons"></div>
-     <input type="number" id="bayar" placeholder="Uang dibayar" oninput="hitungKembalian()" value="0">
-     <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
+      <label>Pembayaran</label>
+      <div class="nominal-grid" id="nominalButtons"></div>
+      <input type="number" id="bayar" placeholder="Uang dibayar" oninput="hitungKembalian()" value="0">
+      <button class="clear-btn" onclick="document.getElementById('bayar').value='0';hitungKembalian();" style="top:auto; bottom:8px;">✕</button>
     </div>
     <div>Kembalian: Rp <span id="kembalian">0</span></div>
     <div id="printerStatusTrans" class="printer-status" style="margin-top:8px;">
@@ -68,16 +74,16 @@
     <button class="btn" onclick="bayarDanCetak()" style="font-size:16px; padding:12px 24px; margin-top:8px;">💳 BAYAR & CETAK</button>
   </div>
 
-  <!-- INVENTORY -->
+  <!-- ================== INVENTORY ================== -->
   <div id="page-inventory" class="page">
     <div class="form-group">
-  <label>Barcode</label>
-  <div style="display:flex; gap:4px;">
-    <input type="text" id="prodBarcode" placeholder="Scan barcode atau ketik manual..." autocomplete="off" style="flex:1;">
-    <button class="btn btn-sm" onclick="generateBarcode()" title="Generate barcode otomatis">🔢 Generate</button>
-  </div>
-  <button class="btn" onclick="cariAtauTambahProduk()" style="margin-top:4px;">Cari / Tambah Produk</button>
-</div>
+      <label>Barcode</label>
+      <div style="display:flex; gap:4px;">
+        <input type="text" id="prodBarcode" placeholder="Scan barcode atau ketik manual..." autocomplete="off" style="flex:1;">
+        <button class="btn btn-sm" onclick="generateBarcode()" title="Generate barcode otomatis">🔢 Generate</button>
+      </div>
+      <button class="btn" onclick="cariAtauTambahProduk()" style="margin-top:4px;">Cari / Tambah Produk</button>
+    </div>
     <div id="productForm" style="display:none;">
       <h3 id="formTitle"></h3>
       <div id="fotoPreviewContainer" style="text-align:center; margin-bottom:12px; display:none;">
@@ -104,7 +110,7 @@
     <div class="table-wrapper"><table class="product-table" id="productListTable"><thead><tr><th>Barcode</th><th>Nama</th><th>Kategori</th><th>Keterangan</th><th>Harga Jual</th><th>Stok</th><th id="thAksi">Aksi</th></tr></thead><tbody></tbody></table></div>
   </div>
 
-  <!-- LAPORAN -->
+  <!-- ================== LAPORAN ================== -->
   <div id="page-laporan" class="page">
     <h3>Ringkasan</h3>
     <div style="display:flex; gap:12px; margin-bottom:12px;">
@@ -127,7 +133,7 @@
     <button class="btn" onclick="exportCSV()">📥 Export CSV</button>
   </div>
 
-  <!-- SETTING -->
+  <!-- ================== SETTING ================== -->
   <div id="page-setting" class="page">
     <div id="manajemenProfilSection">
       <h3>Manajemen Profil</h3>
