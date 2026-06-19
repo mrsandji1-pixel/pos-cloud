@@ -1,5 +1,5 @@
-// ===================== SETTING.JS (dengan invalidate cache) =====================
-let logoTokoDihapus = false;
+// ===================== SETTING.JS (tanpa deklarasi ulang) =====================
+window.logoTokoDihapus = false;
 
 async function muatProfilToko() {
   const s = await getSettings();
@@ -53,7 +53,7 @@ function previewLogoToko() {
       document.getElementById('logoPreviewContainer').style.display = 'block';
     };
     reader.readAsDataURL(f);
-    logoTokoDihapus = false;
+    window.logoTokoDihapus = false;
   }
 }
 
@@ -61,7 +61,7 @@ function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
   document.getElementById('tokoLogo').value = '';
-  logoTokoDihapus = true;
+  window.logoTokoDihapus = true;
 }
 
 async function simpanProfil() {
@@ -79,7 +79,7 @@ async function simpanProfil() {
   const lc = parseInt(document.getElementById('labelCols').value) || 1;
 
   let logo = null;
-  if (!logoTokoDihapus) {
+  if (!window.logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
       logo = await toBase64(fi.files[0]);
@@ -98,9 +98,8 @@ async function simpanProfil() {
   });
 
   alert('Profil disimpan!');
-  logoTokoDihapus = false;
+  window.logoTokoDihapus = false;
   document.getElementById('tokoLogo').value = '';
-  // Perbarui cache di transaksi.js
   if (typeof invalidateSettingsCache === 'function') {
     invalidateSettingsCache();
   }
@@ -120,7 +119,6 @@ async function simpanPengaturanCetak() {
     label_cols: parseInt(document.getElementById('labelCols').value) || 1
   });
   alert('Pengaturan cetak disimpan!');
-  // Perbarui cache di transaksi.js
   if (typeof invalidateSettingsCache === 'function') {
     invalidateSettingsCache();
   }
@@ -221,7 +219,6 @@ async function restoreData() {
       }
 
       alert(`Restore berhasil!\nUsers: ${restored.users}\nProducts: ${restored.products}\nTransactions: ${restored.transactions}\nSettings: ${restored.settings}`);
-      // Refresh cache setelah restore
       if (typeof invalidateSettingsCache === 'function') {
         invalidateSettingsCache();
       }
