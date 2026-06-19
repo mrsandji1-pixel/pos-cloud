@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Optimasi Cepat + Semua Fitur) =====================
+// ===================== TRANSAKSI.JS (Final - Optimasi + Semua Fitur) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -25,7 +25,7 @@ async function setupTransaksi() {
     appSettings = { diskon_item_enabled: true, diskon_total_enabled: true };
   }
 
-  // Hapus elemen statis yang tidak diperlukan (lakukan sekali di awal)
+  // Hapus elemen statis yang tidak diperlukan
   const staticTotalBox = document.querySelector('#page-transaksi .total-box');
   if (staticTotalBox) staticTotalBox.remove();
   document.querySelectorAll('#totalCart').forEach(el => el.remove());
@@ -40,7 +40,7 @@ async function setupTransaksi() {
   const oldNominal = document.getElementById('nominalButtons');
   if (oldNominal) oldNominal.remove();
 
-  // Buat container ringkasan di bawah cartTable (sekali)
+  // Buat container ringkasan di bawah cartTable
   let summaryContainer = document.getElementById('summaryContainer');
   if (!summaryContainer) {
     summaryContainer = document.createElement('div');
@@ -63,7 +63,6 @@ async function setupTransaksi() {
     `;
   }
 
-  // Inisialisasi state
   bayarValue = 0;
   updateBayarDisplay();
 
@@ -88,6 +87,12 @@ async function setupTransaksi() {
 
   totalDiskonValue = 0;
   renderCart(); // render awal (keranjang masih kosong)
+}
+
+function updateBayarDisplay() {
+  const display = document.getElementById('bayarDisplay');
+  if (display) display.textContent = bayarValue.toLocaleString('id');
+  hitungKembalian();
 }
 
 // ========== POP-UP TUNAI ==========
