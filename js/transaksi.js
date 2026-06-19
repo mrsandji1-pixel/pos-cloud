@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Final - Optimasi + Semua Fitur) =====================
+// ===================== TRANSAKSI.JS (Final + Stok Validasi) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -352,10 +352,19 @@ function hitungKembalian() {
   if (el) el.textContent = kembali.toLocaleString('id');
 }
 
-// ========== BAYAR & CETAK ==========
+// ========== BAYAR & CETAK (DENGAN VALIDASI STOK) ==========
 async function bayarDanCetak() {
   if (!cart.length) { alert('Keranjang kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
+
+  // 1. Cek ulang stok saat ini untuk setiap item, batalkan jika kurang
+  for (let item of cart) {
+    const { data: current } = await supabaseClient.from('products').select('stok').eq('barcode', item.barcode).single();
+    if (!current || current.stok < item.qty) {
+      alert(`Stok "${item.nama}" tidak mencukupi!\nTersedia: ${current?.stok || 0}\nDiminta: ${item.qty}\n\nSilakan kurangi atau hapus.`);
+      return; // batalkan transaksi
+    }
+  }
 
   const subtotal1 = cart.reduce((sum, item) => sum + (item.harga * item.qty) - (item.diskon || 0), 0);
   const grandTotal = subtotal1 - totalDiskonValue;
@@ -384,6 +393,7 @@ async function bayarDanCetak() {
   } catch (e) {}
 
   try {
+    // 2. Kurangi stok setelah transaksi sukses
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -479,6 +489,7 @@ async function bayarDanCetak() {
       }, 500);
     }
 
+    // Reset
     cart = [];
     totalDiskonValue = 0;
     bayarValue = 0;
