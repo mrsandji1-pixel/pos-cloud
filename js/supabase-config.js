@@ -1,6 +1,6 @@
 // Supabase Configuration
-const SUPABASE_URL = 'https://ikahekmyqvdugiljcrlp.supabase.co';   // GANTI
-const SUPABASE_ANON_KEY = 'sb_publishable_GjCb5njeiL6W8_HKA-OrLQ_e8dk7IIL'; // GANTI
+const SUPABASE_URL = 'https://cnpofyfgcmbvmvkvqwzn.supabase.co';   // GANTI
+const SUPABASE_ANON_KEY = 'sb_publishable_gG5sImRjUWFEACKhu7F3vg_0z25eK0t'; // GANTI
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Global variables
