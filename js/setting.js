@@ -1,4 +1,6 @@
-// ===================== SETTING.JS =====================
+// ===================== SETTING.JS (dengan invalidate cache) =====================
+let logoTokoDihapus = false;
+
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -98,6 +100,10 @@ async function simpanProfil() {
   alert('Profil disimpan!');
   logoTokoDihapus = false;
   document.getElementById('tokoLogo').value = '';
+  // Perbarui cache di transaksi.js
+  if (typeof invalidateSettingsCache === 'function') {
+    invalidateSettingsCache();
+  }
   await muatProfilToko();
 }
 
@@ -114,7 +120,10 @@ async function simpanPengaturanCetak() {
     label_cols: parseInt(document.getElementById('labelCols').value) || 1
   });
   alert('Pengaturan cetak disimpan!');
-  // Langsung terapkan lebar kertas ke test print dan struk
+  // Perbarui cache di transaksi.js
+  if (typeof invalidateSettingsCache === 'function') {
+    invalidateSettingsCache();
+  }
 }
 
 function aturHakAkses() {
@@ -212,6 +221,10 @@ async function restoreData() {
       }
 
       alert(`Restore berhasil!\nUsers: ${restored.users}\nProducts: ${restored.products}\nTransactions: ${restored.transactions}\nSettings: ${restored.settings}`);
+      // Refresh cache setelah restore
+      if (typeof invalidateSettingsCache === 'function') {
+        invalidateSettingsCache();
+      }
       location.reload();
     } catch (err) {
       alert('Gagal restore: ' + err.message);

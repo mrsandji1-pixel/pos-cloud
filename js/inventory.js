@@ -88,14 +88,18 @@ function tutupFormProduk() {
 
 function hitungStokAkhir() { const a = parseInt(document.getElementById('stokSaatIni').textContent) || 0, b = parseInt(document.getElementById('perubahanStok').value) || 0; document.getElementById('stokAkhir').textContent = a + b; }
 
-async function refreshProductList() {
-  const all = await getAllProducts();
-  document.getElementById('productCount').textContent = all.length;
-  const tbody = document.querySelector('#productListTable tbody'); tbody.innerHTML = '';
-  if (!all.length) { tbody.innerHTML = '<tr><td colspan="8">Belum ada</td></tr>'; return; }
+// ========== RENDER TABEL PRODUK (digunakan bersama) ==========
+function renderProductTable(products) {
+  const tbody = document.querySelector('#productListTable tbody');
+  tbody.innerHTML = '';
+  document.getElementById('productCount').textContent = products.length;
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="8">Tidak ada produk</td></tr>';
+    return;
+  }
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('thAksi').style.display = isAdmin ? '' : 'none';
-  all.forEach(p => {
+  products.forEach(p => {
     const row = tbody.insertRow();
     const namaCell = `<td style="display:flex;align-items:center;gap:6px;">${p.foto ? `<img src="${p.foto}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;">` : '<div style="width:30px;height:30px;background:#e0e0e0;border-radius:4px;display:flex;align-items:center;justify-content:center;">📦</div>'}${p.nama || ''}</td>`;
     const aksi = (isAdmin ? `<button class="btn-sm" onclick="editProdukDariDaftar('${p.barcode}')">✏️</button> <button class="btn-sm btn-danger" onclick="hapusProdukDariDaftar('${p.barcode}')">🗑</button> ` : '') + `<button class="btn-sm" onclick="cetakLabelQR('${p.barcode}')">🏷️ QR</button>`;
@@ -103,7 +107,46 @@ async function refreshProductList() {
   });
 }
 
-function filterProductList() { /* ... */ }
+// ========== REFRESH DAFTAR PRODUK ==========
+async function refreshProductList() {
+  try {
+    const all = await getAllProducts();
+    renderProductTable(all);
+    // Kosongkan kolom pencarian
+    document.getElementById('invSearch').value = '';
+  } catch (e) {
+    console.error(e);
+    document.querySelector('#productListTable tbody').innerHTML = '<tr><td colspan="8">Gagal memuat data</td></tr>';
+  }
+}
+
+// ========== FILTER / PENCARIAN PRODUK ==========
+let filterTimer = null;
+function filterProductList() {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(async () => {
+    const query = document.getElementById('invSearch')?.value.trim();
+    if (!query) {
+      // jika kosong, tampilkan semua produk
+      await refreshProductList();
+      return;
+    }
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('*')
+        .or(`nama.ilike.%${query}%,barcode.ilike.%${query}%,kategori.ilike.%${query}%`)
+        .order('nama')
+        .limit(50);
+      if (error) throw error;
+      renderProductTable(data || []);
+    } catch (e) {
+      console.error(e);
+      document.querySelector('#productListTable tbody').innerHTML = '<tr><td colspan="8">Gagal mencari data</td></tr>';
+    }
+  }, 300);
+}
+
 async function editProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; document.getElementById('prodBarcode').value = b; cariAtauTambahProduk(); }
 async function hapusProdukDariDaftar(b) { if (!currentUser || currentUser.role !== 'admin') return; if (!confirm('Hapus?')) return; await deleteProduct(b); refreshProductList(); }
 
@@ -116,10 +159,8 @@ function generateBarcode() {
   const h = ('0' + now.getHours()).slice(-2);
   const i = ('0' + now.getMinutes()).slice(-2);
   const s = ('0' + now.getSeconds()).slice(-2);
-  // Format: YYMMDDHHMMSS (12 digit)
   const barcode = y + m + d + h + i + s;
   document.getElementById('prodBarcode').value = barcode;
-  // Trigger pencarian/tambah produk dengan barcode baru
   cariAtauTambahProduk();
 }
 
@@ -135,44 +176,28 @@ async function cetakLabelQR(barcode) {
   
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(barcodeText)}`;
 
-  // Landscape: lebar 33mm, tinggi 15mm
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [33, 15] });
-  
-  if (doc.internal.pages.length > 1) {
-    for (let i = doc.internal.pages.length - 1; i > 1; i--) {
-      doc.deletePage(i);
-    }
-  }
 
   const qrImage = new Image();
   qrImage.crossOrigin = 'Anonymous';
   qrImage.onload = () => {
-   // QR code 9x9mm
     doc.addImage(qrImage, 'PNG', 2, 2, 9, 9);
     
-    // Nama produk (font 5pt)
     doc.setFontSize(5);
     const namaLines = doc.splitTextToSize(nama, 23);
     doc.text(namaLines, 12, 3);
     
-    // Harga jual (font 6pt, bold)
     doc.setFontSize(6);
     doc.setFont(undefined, 'bold');
     doc.text(harga, 12, 9);
     
-    // Barcode text (font 3pt)
     doc.setFontSize(3);
     doc.setFont(undefined, 'normal');
     doc.text(barcodeText, 2, 12);
     
-    // Tanggal cetak (font 2pt)
     doc.setFontSize(2);
     doc.text(tglCetak, 12, 12);
-    
-    // Garis potong (opsional)
-    // doc.setLineWidth(0.1);
-    // doc.line(0, 14.5, 33, 14.5);
     
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
