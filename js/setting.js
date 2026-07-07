@@ -1,4 +1,6 @@
-// ===================== SETTING.JS =====================
+// ===================== SETTING.JS (tanpa deklarasi ulang) =====================
+window.logoTokoDihapus = false;
+
 async function muatProfilToko() {
   const s = await getSettings();
   if (s) {
@@ -51,7 +53,7 @@ function previewLogoToko() {
       document.getElementById('logoPreviewContainer').style.display = 'block';
     };
     reader.readAsDataURL(f);
-    logoTokoDihapus = false;
+    window.logoTokoDihapus = false;
   }
 }
 
@@ -59,7 +61,7 @@ function hapusLogoToko() {
   document.getElementById('logoPreview').src = '';
   document.getElementById('logoPreviewContainer').style.display = 'none';
   document.getElementById('tokoLogo').value = '';
-  logoTokoDihapus = true;
+  window.logoTokoDihapus = true;
 }
 
 async function simpanProfil() {
@@ -77,7 +79,7 @@ async function simpanProfil() {
   const lc = parseInt(document.getElementById('labelCols').value) || 1;
 
   let logo = null;
-  if (!logoTokoDihapus) {
+  if (!window.logoTokoDihapus) {
     const fi = document.getElementById('tokoLogo');
     if (fi.files[0]) {
       logo = await toBase64(fi.files[0]);
@@ -96,8 +98,11 @@ async function simpanProfil() {
   });
 
   alert('Profil disimpan!');
-  logoTokoDihapus = false;
+  window.logoTokoDihapus = false;
   document.getElementById('tokoLogo').value = '';
+  if (typeof invalidateSettingsCache === 'function') {
+    invalidateSettingsCache();
+  }
   await muatProfilToko();
 }
 
@@ -114,7 +119,9 @@ async function simpanPengaturanCetak() {
     label_cols: parseInt(document.getElementById('labelCols').value) || 1
   });
   alert('Pengaturan cetak disimpan!');
-  // Langsung terapkan lebar kertas ke test print dan struk
+  if (typeof invalidateSettingsCache === 'function') {
+    invalidateSettingsCache();
+  }
 }
 
 function aturHakAkses() {
@@ -212,6 +219,9 @@ async function restoreData() {
       }
 
       alert(`Restore berhasil!\nUsers: ${restored.users}\nProducts: ${restored.products}\nTransactions: ${restored.transactions}\nSettings: ${restored.settings}`);
+      if (typeof invalidateSettingsCache === 'function') {
+        invalidateSettingsCache();
+      }
       location.reload();
     } catch (err) {
       alert('Gagal restore: ' + err.message);

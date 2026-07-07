@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Final - Struk Rapi + Search Fix) =====================
+// ===================== TRANSAKSI.JS (Final + Stok Validasi) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -6,11 +6,20 @@ let isAdmin = false;
 let totalDiskonValue = 0;
 let bayarValue = 0;
 
+// Cache settings untuk mempercepat loading
+let cachedSettings = null;
+
 async function setupTransaksi() {
   isAdmin = (currentUser && currentUser.role === 'admin');
 
+  // Ambil pengaturan (gunakan cache jika ada)
   try {
-    appSettings = await getSettings();
+    if (cachedSettings) {
+      appSettings = cachedSettings;
+    } else {
+      appSettings = await getSettings();
+      cachedSettings = appSettings; // simpan untuk pemakaian berikutnya
+    }
   } catch (e) {
     console.warn('Gagal ambil settings, gunakan default:', e);
     appSettings = { diskon_item_enabled: true, diskon_total_enabled: true };
@@ -21,7 +30,7 @@ async function setupTransaksi() {
   if (staticTotalBox) staticTotalBox.remove();
   document.querySelectorAll('#totalCart').forEach(el => el.remove());
 
-  // Sembunyikan area pembayaran lama dan kembalian lama
+  // Sembunyikan area pembayaran lama & kembalian lama
   const oldPembayaranGroup = document.getElementById('pembayaranGroup');
   if (oldPembayaranGroup) oldPembayaranGroup.style.display = 'none';
   const oldKembalian = document.querySelector('#page-transaksi #kembalian');
@@ -39,24 +48,25 @@ async function setupTransaksi() {
     summaryContainer.style.cssText = 'background: #f0f4f8; padding: 12px; border-radius: 8px; margin-top: 8px;';
     const cartTable = document.getElementById('cartTable');
     cartTable.parentNode.insertBefore(summaryContainer, cartTable.nextSibling);
+    summaryContainer.innerHTML = `
+      <div id="diskonContainer"></div>
+      <div id="pembayaranSummary" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #d0d8e0; padding-top:8px;">
+        <div>
+          <strong style="font-size:16px;">PEMBAYARAN:</strong>
+          <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI</button>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:bold;">BAYAR: Rp <span id="bayarDisplay">0</span></div>
+          <div style="font-weight:bold;">Kembalian: Rp <span id="kembalianDisplay">0</span></div>
+        </div>
+      </div>
+    `;
   }
-  summaryContainer.innerHTML = `
-    <div id="diskonContainer"></div>
-    <div id="pembayaranSummary" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #d0d8e0; padding-top:8px;">
-      <div>
-        <strong style="font-size:16px;">PEMBAYARAN:</strong>
-        <button class="btn btn-tunai" id="btnTunai" onclick="bukaPopupTunai()">TUNAI</button>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-weight:bold;">BAYAR: Rp <span id="bayarDisplay">0</span></div>
-        <div style="font-weight:bold;">Kembalian: Rp <span id="kembalianDisplay">0</span></div>
-      </div>
-    </div>
-  `;
 
   bayarValue = 0;
   updateBayarDisplay();
 
+  // Event listener scan barcode
   document.getElementById('scanInputTrans').onkeydown = e => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -68,18 +78,15 @@ async function setupTransaksi() {
     }
   };
 
+  // Event listener pencarian produk
   const searchInput = document.getElementById('searchProduct');
   if (searchInput) {
-    searchInput.oninput = function() {
-      searchProductFn(this.value);
-    };
-    searchInput.onfocus = function() {
-      searchProductFn(this.value);
-    };
+    searchInput.oninput = () => searchProductFn(searchInput.value);
+    searchInput.onfocus = () => searchProductFn(searchInput.value);
   }
 
   totalDiskonValue = 0;
-  renderCart();
+  renderCart(); // render awal (keranjang masih kosong)
 }
 
 function updateBayarDisplay() {
@@ -134,7 +141,7 @@ function tambahNominalPopup(nominal) {
 function searchProductFn(query) {
   clearTimeout(searchTimer);
   const div = document.getElementById('searchResults');
-  if (!div) return; // Hentikan jika elemen tidak ada
+  if (!div) return;
   if (!query || query.length < 2) {
     div.style.display = 'none';
     return;
@@ -183,9 +190,7 @@ function searchProductFn(query) {
 
 document.addEventListener('click', e => {
   const s = document.getElementById('searchProduct'), r = document.getElementById('searchResults');
-  if (s && r && e.target !== s && !r.contains(e.target)) {
-    r.style.display = 'none';
-  }
+  if (s && r && e.target !== s && !r.contains(e.target)) r.style.display = 'none';
 });
 
 // ========== TAMBAH PRODUK ==========
@@ -270,7 +275,7 @@ function bukaPopupDiskonTotal() {
   document.getElementById('btnBatalDiskon').onclick = () => document.body.removeChild(modal);
 }
 
-// ========== RENDER CART (dengan box ringkasan) ==========
+// ========== RENDER CART ==========
 function renderCart() {
   const tbody = document.querySelector('#cartTable tbody');
   tbody.innerHTML = '';
@@ -347,10 +352,19 @@ function hitungKembalian() {
   if (el) el.textContent = kembali.toLocaleString('id');
 }
 
-// ========== BAYAR & CETAK ==========
+// ========== BAYAR & CETAK (DENGAN VALIDASI STOK) ==========
 async function bayarDanCetak() {
   if (!cart.length) { alert('Keranjang kosong'); return; }
   const cust = document.getElementById('custName').value.trim();
+
+  // 1. Cek ulang stok saat ini untuk setiap item, batalkan jika kurang
+  for (let item of cart) {
+    const { data: current } = await supabaseClient.from('products').select('stok').eq('barcode', item.barcode).single();
+    if (!current || current.stok < item.qty) {
+      alert(`Stok "${item.nama}" tidak mencukupi!\nTersedia: ${current?.stok || 0}\nDiminta: ${item.qty}\n\nSilakan kurangi atau hapus.`);
+      return; // batalkan transaksi
+    }
+  }
 
   const subtotal1 = cart.reduce((sum, item) => sum + (item.harga * item.qty) - (item.diskon || 0), 0);
   const grandTotal = subtotal1 - totalDiskonValue;
@@ -379,6 +393,7 @@ async function bayarDanCetak() {
   } catch (e) {}
 
   try {
+    // 2. Kurangi stok setelah transaksi sukses
     for (let i of cart) {
       const { data: prod } = await supabaseClient.from('products').select('stok').eq('barcode', i.barcode).single();
       if (prod) {
@@ -387,7 +402,7 @@ async function bayarDanCetak() {
     }
     await insertTransaction(trx);
 
-    const toko = await getSettings();
+    const toko = appSettings; // gunakan settings yang sudah dicache
     const lebarKertas = parseInt(toko.kertas_lebar) || 80;
     const marginKiri = 3, marginKanan = 3;
     const xItem = marginKiri, xQty = lebarKertas * 0.4, xHarga = lebarKertas * 0.65, xSubtotal = lebarKertas - marginKanan;
@@ -474,6 +489,7 @@ async function bayarDanCetak() {
       }, 500);
     }
 
+    // Reset
     cart = [];
     totalDiskonValue = 0;
     bayarValue = 0;
@@ -487,6 +503,7 @@ async function bayarDanCetak() {
   }
 }
 
+// ========== STRUK TEKS ==========
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
   const lebarKertas = parseInt(toko.kertas_lebar) || 80;
   const is80mm = lebarKertas === 80;
@@ -571,4 +588,9 @@ function lihatDetailProduk(barcode) {
     if (p.foto) { img.src = p.foto; img.style.display = 'block'; } else img.style.display = 'none';
     document.getElementById('productDetailModal').style.display = 'flex';
   })();
+}
+
+// Fungsi untuk dipanggil dari setting.js setelah simpan pengaturan
+function invalidateSettingsCache() {
+  cachedSettings = null;
 }
