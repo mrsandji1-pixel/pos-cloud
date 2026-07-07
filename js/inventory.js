@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Kamera + Kompresi + Semua Fitur) =====================
+// ===================== INVENTORY.JS (Kamera + Kompresi + Tombol Batal FIX) =====================
 let currentBarcode = null,
   fotoDihapus = false;
 let capturedPhotoBase64 = null; // menampung hasil foto dari kamera (base64)
@@ -14,7 +14,6 @@ function setupInventory() {
   // Tambahkan tombol kamera di samping input file foto
   const fotoInput = document.getElementById('prodFoto');
   if (fotoInput) {
-    // Bungkus dengan div agar tombol sejajar
     const wrapper = document.createElement('div');
     wrapper.style.display = 'flex';
     wrapper.style.gap = '8px';
@@ -51,9 +50,8 @@ function bukaKamera() {
   const canvas = document.getElementById('kameraCanvas');
   let stream;
 
-  // Mulai kamera
   navigator.mediaDevices
-    .getUserMedia({ video: { facingMode: 'environment' } }) // kamera belakang
+    .getUserMedia({ video: { facingMode: 'environment' } })
     .then((s) => {
       stream = s;
       video.srcObject = stream;
@@ -63,14 +61,12 @@ function bukaKamera() {
       document.body.removeChild(modal);
     });
 
-  // Tombol Capture
   document.getElementById('btnCapture').onclick = () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0);
 
-    // Kompresi: resize maksimal 800px, kualitas JPEG 0.7
     const maxSize = 800;
     let { width, height } = canvas;
     if (width > maxSize || height > maxSize) {
@@ -78,38 +74,30 @@ function bukaKamera() {
       width = Math.round(width * ratio);
       height = Math.round(height * ratio);
     }
-    // Buat canvas sementara untuk resize
     const resizeCanvas = document.createElement('canvas');
     resizeCanvas.width = width;
     resizeCanvas.height = height;
     const resizeCtx = resizeCanvas.getContext('2d');
     resizeCtx.drawImage(canvas, 0, 0, width, height);
 
-    capturedPhotoBase64 = resizeCanvas.toDataURL('image/jpeg', 0.7); // kualitas 70%
+    capturedPhotoBase64 = resizeCanvas.toDataURL('image/jpeg', 0.7);
 
-    // Matikan kamera dan tutup modal
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    if (stream) stream.getTracks().forEach((track) => track.stop());
     document.body.removeChild(modal);
 
-    // Tampilkan preview
     document.getElementById('fotoPreview').src = capturedPhotoBase64;
     document.getElementById('fotoPreviewContainer').style.display = 'block';
     fotoDihapus = false;
-    // Reset input file (opsional, biar tidak bingung)
     document.getElementById('prodFoto').value = '';
   };
 
   document.getElementById('btnBatalKamera').onclick = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    if (stream) stream.getTracks().forEach((track) => track.stop());
     document.body.removeChild(modal);
   };
 }
 
-// ========== FUNGSI LAIN (TIDAK BERUBAH BANYAK) ==========
+// ========== FUNGSI UTAMA ==========
 async function cariAtauTambahProduk() {
   if (!currentUser) return;
   const barcode = document.getElementById('prodBarcode').value.trim();
@@ -117,7 +105,7 @@ async function cariAtauTambahProduk() {
   currentBarcode = barcode;
   document.getElementById('productForm').style.display = 'block';
   fotoDihapus = false;
-  capturedPhotoBase64 = null; // reset foto kamera
+  capturedPhotoBase64 = null;
 
   const product = await getProductByBarcode(barcode);
   const isAdmin = currentUser.role === 'admin';
@@ -151,6 +139,7 @@ async function cariAtauTambahProduk() {
     document.getElementById('btnHapusProduk').style.display = 'none';
     document.getElementById('btnHapusFoto').style.display = 'none';
     document.getElementById('prodFoto').disabled = true;
+    // Tombol Batal tetap bisa muncul
   }
 }
 
@@ -165,7 +154,7 @@ function previewFoto() {
     };
     reader.readAsDataURL(f);
     fotoDihapus = false;
-    capturedPhotoBase64 = null; // file dari input mengalahkan kamera
+    capturedPhotoBase64 = null;
   }
 }
 
@@ -189,18 +178,31 @@ function isiFormProduk(produk, isNew, isAdmin) {
   document.getElementById('perubahanStok').value = 0;
   hitungStokAkhir();
 
+  // ---- TOMBOL BATAL (pastikan ada) ----
+  let btnBatal = document.getElementById('btnBatalProduk');
+  if (!btnBatal) {
+    btnBatal = document.createElement('button');
+    btnBatal.id = 'btnBatalProduk';
+    btnBatal.className = 'btn btn-danger';
+    btnBatal.textContent = 'Batal';
+    btnBatal.onclick = tutupFormProduk;
+    // Sisipkan setelah tombol Simpan
+    const btnSimpan = document.getElementById('btnSimpanProduk');
+    if (btnSimpan && btnSimpan.parentNode) {
+      btnSimpan.parentNode.insertBefore(btnBatal, btnSimpan.nextSibling);
+    } else {
+      document.getElementById('productForm').appendChild(btnBatal);
+    }
+  }
+  btnBatal.style.display = 'inline-block';
+
   if (isAdmin) {
     document.getElementById('btnHapusProduk').style.display = isNew ? 'none' : 'inline-block';
     document.getElementById('btnSimpanProduk').style.display = 'inline-block';
     document.getElementById('btnHapusFoto').style.display = 'block';
     [
-      'prodNama',
-      'prodKategori',
-      'prodKeterangan',
-      'prodHargaBeli',
-      'prodHargaJual',
-      'perubahanStok',
-      'prodFoto',
+      'prodNama', 'prodKategori', 'prodKeterangan', 'prodHargaBeli', 'prodHargaJual',
+      'perubahanStok', 'prodFoto',
     ].forEach((id) => {
       document.getElementById(id).readOnly = false;
       document.getElementById(id).disabled = false;
@@ -209,12 +211,11 @@ function isiFormProduk(produk, isNew, isAdmin) {
     document.getElementById('btnSimpanProduk').onclick = async () => {
       if (!currentBarcode) return;
 
-      // Prioritas foto: kamera > file input > foto lama
       let foto = produk.foto || null;
       if (fotoDihapus) {
         foto = null;
       } else if (capturedPhotoBase64) {
-        foto = capturedPhotoBase64; // hasil kamera yang sudah dikompresi
+        foto = capturedPhotoBase64;
       } else {
         const fi = document.getElementById('prodFoto');
         if (fi.files[0]) {
@@ -253,6 +254,12 @@ function isiFormProduk(produk, isNew, isAdmin) {
         refreshProductList();
       }
     };
+  } else {
+    // non-admin: tombol Simpan & Hapus sudah disembunyikan di pemanggil
+    // tapi kita pastikan lagi
+    document.getElementById('btnSimpanProduk').style.display = 'none';
+    document.getElementById('btnHapusProduk').style.display = 'none';
+    document.getElementById('btnHapusFoto').style.display = 'none';
   }
 }
 
@@ -264,22 +271,19 @@ function tutupFormProduk() {
   document.getElementById('fotoPreviewContainer').style.display = 'none';
   document.getElementById('prodFoto').value = '';
   fotoDihapus = false;
-  capturedPhotoBase64 = null; // reset
-  [
-    'prodNama',
-    'prodKategori',
-    'prodKeterangan',
-    'prodHargaBeli',
-    'prodHargaJual',
-    'perubahanStok',
-    'prodFoto',
-  ].forEach((id) => {
-    document.getElementById(id).readOnly = false;
-    document.getElementById(id).disabled = false;
-  });
+  capturedPhotoBase64 = null;
+  ['prodNama', 'prodKategori', 'prodKeterangan', 'prodHargaBeli', 'prodHargaJual', 'perubahanStok', 'prodFoto'].forEach(
+    (id) => {
+      document.getElementById(id).readOnly = false;
+      document.getElementById(id).disabled = false;
+    }
+  );
   document.getElementById('btnSimpanProduk').style.display = 'inline-block';
   document.getElementById('btnHapusProduk').style.display = 'none';
   document.getElementById('btnHapusFoto').style.display = 'block';
+
+  const btnBatal = document.getElementById('btnBatalProduk');
+  if (btnBatal) btnBatal.style.display = 'none';
 }
 
 function hitungStokAkhir() {
@@ -377,7 +381,7 @@ function generateBarcode() {
   cariAtauTambahProduk();
 }
 
-// ========== CETAK LABEL QR CODE (33x15mm LANDSCAPE) ==========
+// ========== CETAK LABEL QR CODE ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
