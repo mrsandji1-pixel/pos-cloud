@@ -1,4 +1,4 @@
-// ===================== INVENTORY.JS (Kamera + Kompresi + Tombol Batal) =====================
+// ===================== INVENTORY.JS (Kamera + Kompresi + Tombol Batal FIX) =====================
 let currentBarcode = null,
   fotoDihapus = false;
 let capturedPhotoBase64 = null; // menampung hasil foto dari kamera (base64)
@@ -27,28 +27,6 @@ function setupInventory() {
     btnKamera.textContent = '📷 Ambil Foto';
     btnKamera.onclick = bukaKamera;
     wrapper.appendChild(btnKamera);
-  }
-
-  // Siapkan tombol Batal jika belum ada
-  if (!document.getElementById('btnBatalProduk')) {
-    const btnBatal = document.createElement('button');
-    btnBatal.id = 'btnBatalProduk';
-    btnBatal.className = 'btn btn-danger';
-    btnBatal.textContent = 'Batal';
-    btnBatal.onclick = tutupFormProduk;
-    // Tempatkan setelah btnHapusProduk atau di dekat btnSimpanProduk
-    const btnHapus = document.getElementById('btnHapusProduk');
-    if (btnHapus) {
-      btnHapus.parentNode.insertBefore(btnBatal, btnHapus.nextSibling);
-    } else {
-      // fallback: letakkan setelah btnSimpanProduk
-      const btnSimpan = document.getElementById('btnSimpanProduk');
-      if (btnSimpan) {
-        btnSimpan.parentNode.insertBefore(btnBatal, btnSimpan.nextSibling);
-      } else {
-        document.getElementById('productForm').appendChild(btnBatal);
-      }
-    }
   }
 }
 
@@ -89,7 +67,6 @@ function bukaKamera() {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0);
 
-    // Kompresi: resize maksimal 800px, kualitas JPEG 0.7
     const maxSize = 800;
     let { width, height } = canvas;
     if (width > maxSize || height > maxSize) {
@@ -105,9 +82,7 @@ function bukaKamera() {
 
     capturedPhotoBase64 = resizeCanvas.toDataURL('image/jpeg', 0.7);
 
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    if (stream) stream.getTracks().forEach((track) => track.stop());
     document.body.removeChild(modal);
 
     document.getElementById('fotoPreview').src = capturedPhotoBase64;
@@ -117,9 +92,7 @@ function bukaKamera() {
   };
 
   document.getElementById('btnBatalKamera').onclick = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    if (stream) stream.getTracks().forEach((track) => track.stop());
     document.body.removeChild(modal);
   };
 }
@@ -166,8 +139,7 @@ async function cariAtauTambahProduk() {
     document.getElementById('btnHapusProduk').style.display = 'none';
     document.getElementById('btnHapusFoto').style.display = 'none';
     document.getElementById('prodFoto').disabled = true;
-    // Tombol Batal tetap ditampilkan
-    document.getElementById('btnBatalProduk').style.display = 'inline-block';
+    // Tombol Batal tetap bisa muncul
   }
 }
 
@@ -206,21 +178,31 @@ function isiFormProduk(produk, isNew, isAdmin) {
   document.getElementById('perubahanStok').value = 0;
   hitungStokAkhir();
 
-  // Atur visibilitas tombol
-  document.getElementById('btnBatalProduk').style.display = 'inline-block';
+  // ---- TOMBOL BATAL (pastikan ada) ----
+  let btnBatal = document.getElementById('btnBatalProduk');
+  if (!btnBatal) {
+    btnBatal = document.createElement('button');
+    btnBatal.id = 'btnBatalProduk';
+    btnBatal.className = 'btn btn-danger';
+    btnBatal.textContent = 'Batal';
+    btnBatal.onclick = tutupFormProduk;
+    // Sisipkan setelah tombol Simpan
+    const btnSimpan = document.getElementById('btnSimpanProduk');
+    if (btnSimpan && btnSimpan.parentNode) {
+      btnSimpan.parentNode.insertBefore(btnBatal, btnSimpan.nextSibling);
+    } else {
+      document.getElementById('productForm').appendChild(btnBatal);
+    }
+  }
+  btnBatal.style.display = 'inline-block';
 
   if (isAdmin) {
     document.getElementById('btnHapusProduk').style.display = isNew ? 'none' : 'inline-block';
     document.getElementById('btnSimpanProduk').style.display = 'inline-block';
     document.getElementById('btnHapusFoto').style.display = 'block';
     [
-      'prodNama',
-      'prodKategori',
-      'prodKeterangan',
-      'prodHargaBeli',
-      'prodHargaJual',
-      'perubahanStok',
-      'prodFoto',
+      'prodNama', 'prodKategori', 'prodKeterangan', 'prodHargaBeli', 'prodHargaJual',
+      'perubahanStok', 'prodFoto',
     ].forEach((id) => {
       document.getElementById(id).readOnly = false;
       document.getElementById(id).disabled = false;
@@ -273,7 +255,8 @@ function isiFormProduk(produk, isNew, isAdmin) {
       }
     };
   } else {
-    // non-admin
+    // non-admin: tombol Simpan & Hapus sudah disembunyikan di pemanggil
+    // tapi kita pastikan lagi
     document.getElementById('btnSimpanProduk').style.display = 'none';
     document.getElementById('btnHapusProduk').style.display = 'none';
     document.getElementById('btnHapusFoto').style.display = 'none';
@@ -298,7 +281,9 @@ function tutupFormProduk() {
   document.getElementById('btnSimpanProduk').style.display = 'inline-block';
   document.getElementById('btnHapusProduk').style.display = 'none';
   document.getElementById('btnHapusFoto').style.display = 'block';
-  document.getElementById('btnBatalProduk').style.display = 'none';
+
+  const btnBatal = document.getElementById('btnBatalProduk');
+  if (btnBatal) btnBatal.style.display = 'none';
 }
 
 function hitungStokAkhir() {
@@ -396,7 +381,7 @@ function generateBarcode() {
   cariAtauTambahProduk();
 }
 
-// ========== CETAK LABEL QR CODE (33x15mm LANDSCAPE) ==========
+// ========== CETAK LABEL QR CODE ==========
 async function cetakLabelQR(barcode) {
   const product = await getProductByBarcode(barcode);
   if (!product) return alert('Produk tidak ditemukan');
