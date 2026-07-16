@@ -1,4 +1,4 @@
-// ===================== TRANSAKSI.JS (Final + Stok Validasi) =====================
+// ===================== TRANSAKSI.JS (Final + Ringkasan 58mm) =====================
 let cart = [];
 let searchTimer = null;
 let appSettings = {};
@@ -503,7 +503,7 @@ async function bayarDanCetak() {
   }
 }
 
-// ========== STRUK TEKS ==========
+// ========== STRUK TEKS (DIPERBAIKI UNTUK 58mm) ==========
 function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, no, cust) {
   const lebarKertas = parseInt(toko.kertas_lebar) || 80;
   const is80mm = lebarKertas === 80;
@@ -520,6 +520,22 @@ function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali,
   function padLeft(text, length) {
     if (text.length > length) return text.substring(0, length);
     return ' '.repeat(length - text.length) + text;
+  }
+  // Fungsi bantu untuk baris ringkasan
+  function formatSummary(label, value, isDiscount = false) {
+    const labelMax = is80mm ? 16 : 10; // lebar maksimal label
+    let lbl = label.substring(0, labelMax).padEnd(labelMax);
+    let val = (isDiscount ? '-Rp' : 'Rp') + value.toLocaleString('id');
+    // Geser 3 karakter ke kiri pada 58mm
+    if (!is80mm) {
+      lbl = label.substring(0, labelMax - 3).padEnd(labelMax - 3); // lebih pendek 3 char
+    }
+    const spaceAvailable = charWidth - lbl.length;
+    if (val.length > spaceAvailable) {
+      // Potong jika tidak muat (darurat)
+      val = val.substring(0, spaceAvailable);
+    }
+    return lbl + val.padStart(spaceAvailable);
   }
 
   let teks = '';
@@ -553,20 +569,19 @@ function buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali,
     for (let p = 1; p < parts.length; p++) {
       teks += padRight(parts[p], lebarItem) + '\n';
     }
-
     if (i.diskon) {
       teks += '  Diskon item: -Rp' + i.diskon.toLocaleString('id') + '\n';
     }
   });
 
   teks += '-'.repeat(charWidth) + '\n';
-  teks += 'Subtotal:'.padEnd(25) + 'Rp' + subtotal1.toLocaleString('id') + '\n';
+  teks += formatSummary('Subtotal:', subtotal1) + '\n';
   if (totalDiskon > 0) {
-    teks += 'Diskon:'.padEnd(25) + '-Rp' + totalDiskon.toLocaleString('id') + '\n';
+    teks += formatSummary('Diskon:', totalDiskon, true) + '\n';
   }
-  teks += 'TOTAL:'.padEnd(25) + 'Rp' + grandTotal.toLocaleString('id') + '\n';
-  teks += 'Bayar:'.padEnd(25) + 'Rp' + bayar.toLocaleString('id') + '\n';
-  teks += 'Kembali:'.padEnd(25) + 'Rp' + kembali.toLocaleString('id') + '\n';
+  teks += formatSummary('TOTAL:', grandTotal) + '\n';
+  teks += formatSummary('Bayar:', bayar) + '\n';
+  teks += formatSummary('Kembali:', kembali) + '\n';
   if (toko.footer) {
     teks += '\n' + toko.footer + '\n';
   }

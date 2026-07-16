@@ -1,4 +1,4 @@
-// ===================== LAPORAN.JS (Tombol Hapus Hanya Admin) =====================
+// ===================== LAPORAN.JS (Dengan Rincian Diskon + Admin + BT) =====================
 let chartInstance = null;
 let topProductsChart = null;
 
@@ -37,16 +37,19 @@ async function muatLaporan() {
   const all = await getAllTransactions(a + 'T00:00:00', b + 'T23:59:59');
   const tbody = document.querySelector('#reportTable tbody');
   tbody.innerHTML = '';
+  const isAdmin = currentUser && currentUser.role === 'admin';
   if (!all.length) {
     tbody.innerHTML = '<tr><td colspan="5">Tidak ada</td></tr>';
   } else {
     all.forEach(t => {
       const row = tbody.insertRow();
+      // Tombol hapus hanya untuk admin
+      const hapusBtn = isAdmin ? `<button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>` : '';
       row.innerHTML = `<td>${t.no_invoice}</td><td>${new Date(t.tanggal).toLocaleDateString('id-ID')}</td><td>${t.customer || '-'}</td><td>Rp${t.total.toLocaleString('id')}</td><td>
         <button class="btn-sm" onclick="viewInvoice('${t.no_invoice}')">👁️</button>
         <button class="btn-sm" onclick="cetakUlang('${t.no_invoice}')">🖨️ PDF</button>
         <button class="btn-sm" onclick="cetakUlangBT('${t.no_invoice}')">🖨️ BT</button>
-        ${(currentUser && currentUser.role === 'admin') ? `<button class="btn-sm btn-danger" onclick="hapusTransaksi('${t.no_invoice}')">🗑</button>` : ''}
+        ${hapusBtn}
       </td>`;
     });
   }
@@ -56,7 +59,7 @@ async function muatLaporan() {
   renderTopProductsChart(all);
 }
 
-// ========== CETAK ULANG VIA BLUETOOTH (DIPERBAIKI) ==========
+// ========== CETAK ULANG BLUETOOTH (DENGAN RINCIAN DISKON) ==========
 async function cetakUlangBT(noInv) {
   if (!bluetoothDevice || !bluetoothCharacteristic) {
     alert('Printer Bluetooth tidak terhubung. Sambungkan dulu di tab Setting.');
@@ -64,36 +67,37 @@ async function cetakUlangBT(noInv) {
   }
 
   const trx = await getTransaction(noInv);
-  if (!trx) {
-    alert('Transaksi tidak ditemukan');
-    return;
-  }
+  if (!trx) { alert('Transaksi tidak ditemukan'); return; }
 
   const toko = await getSettings();
   const cart = trx.items || [];
 
-  // Hitung subtotal1 (setelah diskon per item, jika data diskon ada)
+  // Hitung subtotal1 (setelah diskon per item)
   const subtotal1 = cart.reduce((sum, item) => {
     const sub = item.harga * item.qty;
     const diskon = item.diskon || 0;
     return sum + (sub - diskon);
   }, 0);
-  // Diskon total (dari transaksi, default 0)
   const totalDiskon = trx.totalDiskon || 0;
-  // Grand Total = subtotal1 - totalDiskon (seharusnya sama dengan trx.total)
   const grandTotal = subtotal1 - totalDiskon;
-  // Bayar & Kembali
   const bayar = trx.bayar || 0;
   const kembali = trx.kembali || 0;
 
-  // Panggil fungsi buatStrukTeks versi 9 parameter (harus ada di transaksi.js)
-  const teks = buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, trx.no_invoice, trx.customer);
-
-  await cetakStrukKePrinter(toko.logo || null, teks);
+  // Gunakan fungsi dari transaksi.js (pastikan buatStrukTeks tersedia)
+  if (typeof buatStrukTeks === 'function') {
+    const teks = buatStrukTeks(cart, subtotal1, totalDiskon, grandTotal, bayar, kembali, toko, trx.no_invoice, trx.customer);
+    await cetakStrukKePrinter(toko.logo || null, teks);
+  } else {
+    alert('Fungsi buatStrukTeks tidak ditemukan. Pastikan transaksi.js sudah dimuat.');
+  }
 }
 
-// ========== HAPUS TRANSAKSI ==========
+// ========== HAPUS TRANSAKSI (ADMIN SAJA) ==========
 async function hapusTransaksi(noInv) {
+  if (!currentUser || currentUser.role !== 'admin') {
+    alert('Hanya admin yang dapat menghapus transaksi.');
+    return;
+  }
   if (!confirm(`Hapus transaksi ${noInv}? Stok akan dikembalikan.`)) return;
   const trx = await getTransaction(noInv);
   if (!trx) return alert('Transaksi tidak ditemukan');
@@ -111,50 +115,25 @@ async function hapusTransaksi(noInv) {
   } catch (e) { alert('Gagal menghapus: ' + e.message); }
 }
 
-// ========== VIEW & CETAK PDF (FALLBACK) ==========
-async function viewInvoice(noInv) {
-  const url = await getInvoiceURL(noInv);
-  if (url) {
-    window.open(url, '_blank');
-    return;
-  }
-  const trx = await getTransaction(noInv);
-  if (!trx) return alert('Transaksi tidak ditemukan');
-  const toko = await getSettings();
-  trx.toko_nama = toko.nama; trx.toko_alamat = toko.alamat; trx.toko_footer = toko.footer;
-  const blob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(blob);
-  window.open(blobUrl, '_blank');
-}
-
-async function cetakUlang(noInv) {
-  const url = await getInvoiceURL(noInv);
-  if (url) {
-    const pw = window.open(url, '_blank');
-    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-    return;
-  }
-  const trx = await getTransaction(noInv);
-  if (!trx) return alert('Transaksi tidak ditemukan');
-  const toko = await getSettings();
-  trx.toko_nama = toko.nama; trx.toko_alamat = toko.alamat; trx.toko_footer = toko.footer;
-  const blob = generateInvoicePDF(trx);
-  const blobUrl = URL.createObjectURL(blob);
-  const pw = window.open(blobUrl, '_blank');
-  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
-}
-
-// ========== GENERATE PDF DARI DATA TRANSAKSI (sama seperti sebelumnya) ==========
+// ========== GENERATE PDF DENGAN RINCIAN DISKON ==========
 function generateInvoicePDF(trx) {
   const { jsPDF } = window.jspdf;
   const lebarKertas = 80;
   const marginKiri = 3, marginKanan = 3;
   const xItem = marginKiri, xQty = lebarKertas * 0.4, xHarga = lebarKertas * 0.65, xSubtotal = lebarKertas - marginKanan;
+
+  // Hitung subtotal1 (setelah diskon item) dari items
+  const cart = trx.items || [];
+  const subtotal1 = cart.reduce((sum, i) => sum + (i.harga * i.qty) - (i.diskon || 0), 0);
+  const totalDiskon = trx.totalDiskon || 0;
+
   let tinggiHeader = 28;
-  const tinggiItem = (trx.items || []).length * 5;
-  const tinggiTotalBayar = 15;
+  const tinggiItem = cart.length * 5;
+  const tinggiDiskonBaris = totalDiskon > 0 ? 5 : 0;
+  const tinggiTotalBayar = 20 + tinggiDiskonBaris;
   const tinggiFooter = trx.toko_footer ? 12 : 0;
-  const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + 10;
+  const marginBawah = 10;
+  const tinggiTotal = tinggiHeader + tinggiItem + tinggiTotalBayar + tinggiFooter + marginBawah;
 
   const doc = new jsPDF({ unit: 'mm', format: [lebarKertas, tinggiTotal] });
   let y = 8;
@@ -174,8 +153,9 @@ function generateInvoicePDF(trx) {
   doc.text('Subtotal', xSubtotal, y, { align: 'right' });
   y += 4; doc.line(marginKiri, y, xSubtotal, y); y += 3;
 
-  (trx.items || []).forEach(item => {
-    const netto = (item.harga * item.qty) - (item.diskon || 0);
+  cart.forEach(item => {
+    const sub = item.harga * item.qty;
+    const netto = sub - (item.diskon || 0);
     doc.text(item.nama, xItem, y, { maxWidth: xQty - xItem - 2 });
     doc.text(item.qty.toString(), xQty, y, { align: 'center' });
     doc.text('Rp' + item.harga.toLocaleString('id'), xHarga, y, { align: 'right' });
@@ -183,16 +163,32 @@ function generateInvoicePDF(trx) {
     if (item.diskon) {
       y += 4;
       doc.setFontSize(6);
-      doc.text('  Diskon item: -Rp' + item.diskon.toLocaleString('id'), xItem + 5, y);
+      doc.text(`  Diskon item: -Rp${item.diskon.toLocaleString('id')}`, xItem + 5, y);
       doc.setFontSize(7);
     }
     y += 5;
   });
   doc.line(marginKiri, y, xSubtotal, y); y += 4;
 
-  doc.text('Total:', xItem, y);
-  doc.text('Rp' + trx.total.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+  // Subtotal1
+  doc.text('Subtotal:', xItem, y);
+  doc.text('Rp' + subtotal1.toLocaleString('id'), xSubtotal, y, { align: 'right' });
   y += 5;
+
+  // Diskon total (jika ada)
+  if (totalDiskon > 0) {
+    doc.text('Diskon:', xItem, y);
+    doc.text('-Rp' + totalDiskon.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+    y += 5;
+  }
+
+  // Grand Total
+  doc.setFontSize(9);
+  doc.text('TOTAL:', xItem, y);
+  doc.text('Rp' + trx.total.toLocaleString('id'), xSubtotal, y, { align: 'right' });
+  y += 6;
+
+  doc.setFontSize(8);
   doc.text('Bayar:', xItem, y);
   doc.text('Rp' + trx.bayar.toLocaleString('id'), xSubtotal, y, { align: 'right' });
   y += 5;
@@ -206,6 +202,46 @@ function generateInvoicePDF(trx) {
   }
 
   return doc.output('blob');
+}
+
+// ========== VIEW INVOICE (FALLBACK) ==========
+async function viewInvoice(noInv) {
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    window.open(url, '_blank');
+    return;
+  }
+
+  const trx = await getTransaction(noInv);
+  if (!trx) return alert('Transaksi tidak ditemukan');
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama;
+  trx.toko_alamat = toko.alamat;
+  trx.toko_footer = toko.footer;
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank');
+}
+
+// ========== CETAK ULANG (FALLBACK) ==========
+async function cetakUlang(noInv) {
+  const url = await getInvoiceURL(noInv);
+  if (url) {
+    const pw = window.open(url, '_blank');
+    if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
+    return;
+  }
+
+  const trx = await getTransaction(noInv);
+  if (!trx) return alert('Transaksi tidak ditemukan');
+  const toko = await getSettings();
+  trx.toko_nama = toko.nama;
+  trx.toko_alamat = toko.alamat;
+  trx.toko_footer = toko.footer;
+  const blob = generateInvoicePDF(trx);
+  const blobUrl = URL.createObjectURL(blob);
+  const pw = window.open(blobUrl, '_blank');
+  if (pw) pw.addEventListener('load', () => pw.print(), { once: true });
 }
 
 // ========== CHART ==========
